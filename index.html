@@ -392,6 +392,30 @@
       return clamp(alt, 1.05, 2.8);
     }
 
+    // Midpoint for label (simple spherical midpoint)
+    function midPointLatLng(a, b) {
+      const lat1 = rad(a.lat), lon1 = rad(a.lng);
+      const lat2 = rad(b.lat), lon2 = rad(b.lng);
+
+      const x1 = Math.cos(lat1) * Math.cos(lon1);
+      const y1 = Math.cos(lat1) * Math.sin(lon1);
+      const z1 = Math.sin(lat1);
+
+      const x2 = Math.cos(lat2) * Math.cos(lon2);
+      const y2 = Math.cos(lat2) * Math.sin(lon2);
+      const z2 = Math.sin(lat2);
+
+      const x = x1 + x2;
+      const y = y1 + y2;
+      const z = z1 + z2;
+
+      const hyp = Math.sqrt(x*x + y*y);
+      const lat = Math.atan2(z, hyp);
+      const lon = Math.atan2(y, x);
+
+      return { lat: deg(lat), lng: deg(lon) };
+    }
+
     // -------------------------
     // Difficulty computation
     // -------------------------
@@ -413,7 +437,7 @@
       const dLon = rad(lon2 - lon1);
       const s1 = Math.sin(dLat / 2);
       const s2 = Math.sin(dLon / 2);
-      const a = s1*s1 + Math.cos(rad(lat1))*s2*s2*Math.sin(dLon/2)*Math.sin(dLon/2);
+      const a = s1*s1 + Math.cos(rad(lat1))*Math.cos(rad(lat2))*s2*s2;
       return 2 * R * Math.asin(Math.sqrt(a));
     }
 
@@ -447,7 +471,6 @@
         return clamp((v - a) / (b - a), 0, 1);
       };
 
-      // Regional ambiguity: avg distance to 5 nearest centroids (smaller => harder)
       const centroid = ids.map(id => {
         const st = statsById.get(id);
         return st ? { id, lat: st.lat, lng: st.lng } : null;
@@ -470,7 +493,6 @@
       }
       const minN = Math.min(...distsAll), maxN = Math.max(...distsAll);
 
-      // Name ambiguity
       const nameBigrams = new Map();
       for (const id of ids) nameBigrams.set(id, bigramSet(idToNameEN.get(id) || ""));
 
@@ -759,7 +781,8 @@
       revealTarget,       // highlight + fly-to when true
       locked,
       clickMarker,
-      targetMarker
+      targetMarker,
+      reveal              // <- NEW: needed for distance label
     }) {
       const containerRef = useRef(null);
       const globeRef = useRef(null);
@@ -801,6 +824,20 @@
           side: `rgba(0,0,0,0)`
         };
       }, [theme, borderIntensity]);
+
+      // Great-circle arc style
+      const arcStyle = useMemo(() => {
+        if (theme === "light") {
+          return {
+            color: "rgba(2,6,23,0.85)",
+            colorAlt: "rgba(59,130,246,0.95)"
+          };
+        }
+        return {
+          color: "rgba(226,232,240,0.85)",
+          colorAlt: "rgba(96,165,250,0.95)"
+        };
+      }, [theme]);
 
       useEffect(() => {
         const el = containerRef.current;
@@ -879,6 +916,7 @@
           })
           .polygonsTransitionDuration(reduceMotion ? 0 : 250);
 
+        // Points (markers)
         const pts = [];
         if (clickMarker) pts.push({ ...clickMarker, kind: "click" });
         if (targetMarker) pts.push({ ...targetMarker, kind: "target" });
@@ -891,7 +929,59 @@
           .pointAltitude(d => d.kind === "click" ? 0.02 : 0.03)
           .pointRadius(d => d.kind === "click" ? 0.5 : 0.7);
 
-      }, [countries, targetId, mode, reduceMotion, borderStyle, revealTarget, clickMarker, targetMarker]);
+        // --------
+        // NEW: Great-circle learning arc + label (click mode, wrong answer)
+        // --------
+        const shouldArc = !!(revealTarget &&
+          reveal?.mode === "click" &&
+          reveal?.correct === false &&
+          clickMarker && targetMarker &&
+          isFinite(reveal?.distKm));
+
+        const arcs = shouldArc ? [{
+          startLat: clickMarker.lat,
+          startLng: clickMarker.lng,
+          endLat: targetMarker.lat,
+          endLng: targetMarker.lng,
+          distKm: Math.round(reveal.distKm)
+        }] : [];
+
+        globe
+          .arcsData(arcs)
+          .arcStartLat(d => d.startLat)
+          .arcStartLng(d => d.startLng)
+          .arcEndLat(d => d.endLat)
+          .arcEndLng(d => d.endLng)
+          .arcColor(() => [arcStyle.colorAlt, arcStyle.color])
+          .arcStroke(() => 0.9)
+          .arcAltitude(() => 0.18)
+          .arcDashLength(() => 0.45)
+          .arcDashGap(() => 0.25)
+          .arcDashAnimateTime(() => reduceMotion ? 0 : 1400);
+
+        const labels = shouldArc ? (() => {
+          const mid = midPointLatLng(
+            { lat: clickMarker.lat, lng: clickMarker.lng },
+            { lat: targetMarker.lat, lng: targetMarker.lng }
+          );
+          return [{
+            lat: mid.lat,
+            lng: mid.lng,
+            text: `${Math.round(reveal.distKm)} km`
+          }];
+        })() : [];
+
+        globe
+          .labelsData(labels)
+          .labelLat(d => d.lat)
+          .labelLng(d => d.lng)
+          .labelText(d => d.text)
+          .labelSize(() => 0.9)
+          .labelDotRadius(() => 0.0)
+          .labelAltitude(() => 0.20)
+          .labelColor(() => arcStyle.colorAlt);
+
+      }, [countries, targetId, mode, reduceMotion, borderStyle, revealTarget, clickMarker, targetMarker, reveal, arcStyle]);
 
       // Click picking
       useEffect(() => {
@@ -1073,7 +1163,7 @@
       const [choices, setChoices] = useState([]);
       const [locked, setLocked] = useState(false);
 
-      // reveal state: NOT a modal, shown as an inline card
+      // reveal state
       const [reveal, setReveal] = useState(null); // {mode, correct, correctName, yourName, distKm, diff, mult, points}
       const [revealTarget, setRevealTarget] = useState(false);
 
@@ -1145,13 +1235,11 @@
               if (id && de) mapDE.set(id, de);
             }
 
-            // Keep only features that exist in the reduced TSV
             const withNames = feats.filter(f => mapEN.has(String(f.id)));
             setCountries(withNames);
             setIdToEN(mapEN);
             setIdToDE(mapDE);
 
-            // Difficulty uses EN names (stable keys)
             const pack = computeDifficultyForCountries(withNames, mapEN);
             setDiffPack(pack);
 
@@ -1163,7 +1251,6 @@
         })();
       }, []);
 
-      // Build deck with difficulty climax + better first-round randomness
       function buildDeckForGame() {
         const N = settings.roundsTotal;
         const maxD = settings.maxDifficulty;
@@ -1187,7 +1274,6 @@
         for (let i = 0; i < N; i++) {
           let pick;
 
-          // Round 1: random among broad easy slice (prevents “USA often first”)
           if (i === 0) {
             const easySlice = sorted.slice(0, Math.max(25, Math.floor(sorted.length * 0.25)));
             pick = pickCrypto(easySlice);
@@ -1270,14 +1356,12 @@
         else setChoices([]);
       }
 
-      // start initial game once ready
       useEffect(() => {
         if (!loading && !loadErr && countries.length && idToEN.size && getDiffById && deck.length === 0) {
           resetGame("click");
         }
       }, [loading, loadErr, countries.length, idToEN.size, !!getDiffById]);
 
-      // rebuild choices when language changes (so buttons show DE/EN)
       useEffect(() => {
         if (!targetId) return;
         if (mode === "choice" && !reveal && choices.length) {
@@ -1322,7 +1406,6 @@
         else setChoices([]);
       }
 
-      // Timer (optional)
       useEffect(() => {
         if (!settings.timerEnabled) return;
         if (locked || reveal || gameOverOpen) return;
@@ -1349,7 +1432,6 @@
 
         if (!isTimeout && pt) setClickMarker({ lat: pt.lat, lng: pt.lng });
 
-        // marker for target centroid
         const st = getFeatureStatsById?.(targetId);
         if (st) setTargetMarker({ lat: st.lat, lng: st.lng });
 
@@ -1372,7 +1454,6 @@
 
         updateLearnLog(targetId, correct);
 
-        // AFTER answer: fly-to + highlight correct country (learning)
         setRevealTarget(true);
 
         const correctName = activeNames.get(String(targetId)) || idToEN.get(String(targetId)) || "—";
@@ -1413,7 +1494,6 @@
 
         updateLearnLog(targetId, correct);
 
-        // learning: always fly-to correct country & highlight (even if correct, it's quick)
         setRevealTarget(true);
 
         const correctName = activeNames.get(String(targetId)) || idToEN.get(String(targetId)) || "—";
@@ -1484,6 +1564,7 @@
                 locked={locked || !!reveal || gameOverOpen}
                 clickMarker={clickMarker}
                 targetMarker={targetMarker}
+                reveal={reveal}
               />
             </div>
 
@@ -1586,14 +1667,17 @@
                   </div>
                 </div>
 
-                {/* Inline learning reveal card (NOT hiding globe) */}
+                {/* Inline learning reveal card */}
                 {reveal && (
                   <div className={["mt-3 rounded-2xl ring-1 p-4 pop", themeTokens.panel, themeTokens.ring].join(" ")}>
                     <div className="flex items-start justify-between gap-3">
                       <div className={["text-lg font-extrabold", themeTokens.textStrong].join(" ")}>
                         {reveal.correct ? `✅ ${t("correct")}` : `❌ ${t("wrong")}`}
                       </div>
-                      <button onClick={gotoNextQuestion} className={["rounded-xl px-3 py-2 ring-1 transition font-semibold", themeTokens.btnPrimary].join(" ")}>
+                      <button onClick={() => {
+                        // clear arc/label before continuing
+                        gotoNextQuestion();
+                      }} className={["rounded-xl px-3 py-2 ring-1 transition font-semibold", themeTokens.btnPrimary].join(" ")}>
                         {t("next")}
                       </button>
                     </div>
@@ -1636,9 +1720,11 @@
                       </div>
                     </div>
 
-                    <div className={["mt-3 text-xs", themeTokens.textMuted].join(" ")}>
-                      After answering, the globe flies to the correct country (learning).
-                    </div>
+                    {reveal.mode === "click" && !reveal.correct && (
+                      <div className={["mt-3 text-xs", themeTokens.textMuted].join(" ")}>
+                        Learning aid: the dashed arc shows the shortest path to the correct country; the label shows the distance.
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1661,7 +1747,10 @@
               <div className={["rounded-2xl ring-1 p-4", themeTokens.panel, themeTokens.ring].join(" ")}>
                 <div className="flex items-center justify-between gap-3">
                   <div className={["text-xl font-bold", themeTokens.textStrong].join(" ")}>{t("highscore")}</div>
-                  <button onClick={resetHighscores} className={["rounded-xl px-3 py-2 ring-1 transition text-sm font-semibold", themeTokens.btnGhost].join(" ")}>
+                  <button onClick={() => setHighscores({
+                    click: { bestScore: 0, bestAccuracy: 0, bestStreak: 0 },
+                    choice: { bestScore: 0, bestAccuracy: 0, bestStreak: 0 },
+                  })} className={["rounded-xl px-3 py-2 ring-1 transition text-sm font-semibold", themeTokens.btnGhost].join(" ")}>
                     {t("reset")}
                   </button>
                 </div>
@@ -1698,7 +1787,6 @@
                 </div>
               </div>
 
-              {/* Simple Game Over card (also not hiding globe) */}
               {gameOverOpen && (
                 <div className={["rounded-2xl ring-1 p-4 pop", themeTokens.panel, themeTokens.ring].join(" ")}>
                   <div className="flex items-start justify-between gap-3">
@@ -1749,7 +1837,7 @@
             setSettings={(s) => {
               const ns = normalizeSettings(s);
               setSettings(ns);
-              resetGame(mode); // rebuild with difficulty setting, new language etc.
+              resetGame(mode);
             }}
             onClose={() => setSettingsOpen(false)}
             onDownloadCSV={() => downloadCSV({ idToEN, idToDE, countries })}
