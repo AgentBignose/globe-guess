@@ -9,16 +9,8 @@
     html, body { height: 100%; }
     body { margin: 0; overscroll-behavior: none; }
     * { -webkit-tap-highlight-color: transparent; }
-    @keyframes pop {
-      0% { transform: scale(.96); opacity: 0; }
-      100% { transform: scale(1); opacity: 1; }
-    }
-    .pop { animation: pop .18s ease-out; }
-    @keyframes confettiFall {
-      0% { transform: translateY(-20px) rotate(0deg); opacity: 0; }
-      15% { opacity: 1; }
-      100% { transform: translateY(520px) rotate(320deg); opacity: 0; }
-    }
+    @keyframes pop { 0%{transform:scale(.98);opacity:0} 100%{transform:scale(1);opacity:1} }
+    .pop { animation: pop .16s ease-out; }
   </style>
 </head>
 <body>
@@ -43,7 +35,26 @@
     const { useEffect, useMemo, useRef, useState } = React;
 
     // -------------------------
-    // i18n
+    // crypto RNG (better randomness)
+    // -------------------------
+    function randInt(n) {
+      if (n <= 0) return 0;
+      const a = new Uint32Array(1);
+      crypto.getRandomValues(a);
+      return a[0] % n;
+    }
+    function pickCrypto(arr) { return arr[randInt(arr.length)]; }
+    function shuffleCrypto(arr) {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = randInt(i + 1);
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    // -------------------------
+    // i18n (UI only)
     // -------------------------
     const I18N = {
       en: {
@@ -86,11 +97,11 @@
         highlightHint: "(It flies to center + zoom depends on size)",
         loading: "Loading globe…",
         loadFailTitle: "Couldn’t load data",
-        loadFailTip: "Make sure you host these locally: ./data/countries-110m.json and ./data/country-names.tsv",
+        loadFailTip: "Host locally: ./data/countries-110m.json and ./data/country-names.tsv (id,en,de)",
         correct: "Correct!",
         wrong: "Wrong",
         gameOverTitle: "Game Over",
-        gameOverBody: "Nice run! Here are your stats.",
+        gameOverBody: "Here are your stats.",
         playAgain: "Play again",
         summaryMode: "Mode",
         summaryRounds: "Rounds",
@@ -108,7 +119,10 @@
         revealTitle: "Answer",
         proceed: "Continue",
         difficultyClimax: "Difficulty climax",
-        difficultyClimaxHint: "Easier early rounds, harder later rounds."
+        difficultyClimaxHint: "Easier early rounds, harder later rounds.",
+        learnLog: "Learning log",
+        downloadCSV: "Download CSV",
+        resetLog: "Reset log"
       },
       de: {
         title: "Globus-Quiz",
@@ -145,16 +159,16 @@
         distance: "Distanz",
         points: "Punkte",
         findAndClick: "Finde und klicke:",
-        clickAnywhere: "Klicke irgendwo auf den Globus. Die Punkte hängen von der Distanz zur Grenze ab.",
+        clickAnywhere: "Klicke irgendwo auf den Globus. Punkte basieren auf Distanz zur Grenze.",
         highlightedIs: "Das markierte Land ist:",
         highlightHint: "(Fliegt ins Zentrum + Zoom je nach Größe)",
         loading: "Globus wird geladen…",
         loadFailTitle: "Daten konnten nicht geladen werden",
-        loadFailTip: "Bitte lokal hosten: ./data/countries-110m.json und ./data/country-names.tsv",
+        loadFailTip: "Lokal hosten: ./data/countries-110m.json und ./data/country-names.tsv (id,en,de)",
         correct: "Richtig!",
         wrong: "Falsch",
         gameOverTitle: "Spiel vorbei",
-        gameOverBody: "Gut gemacht! Hier sind deine Statistiken.",
+        gameOverBody: "Hier sind deine Statistiken.",
         playAgain: "Nochmal spielen",
         summaryMode: "Modus",
         summaryRounds: "Runden",
@@ -172,7 +186,10 @@
         revealTitle: "Antwort",
         proceed: "Weiter",
         difficultyClimax: "Schwierigkeits-Klimax",
-        difficultyClimaxHint: "Leicht am Anfang, später schwieriger."
+        difficultyClimaxHint: "Leicht am Anfang, später schwieriger.",
+        learnLog: "Lernprotokoll",
+        downloadCSV: "CSV herunterladen",
+        resetLog: "Protokoll löschen"
       }
     };
 
@@ -182,20 +199,10 @@
     const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
     const rad = (d) => d * Math.PI / 180;
     const deg = (r) => r * 180 / Math.PI;
-
-    function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-    function shuffle(arr) {
-      const a = arr.slice();
-      for (let i = a.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [a[i], a[j]] = [a[j], a[i]];
-      }
-      return a;
-    }
-    function formatPct(x) { if (!isFinite(x)) return "—"; return `${Math.round(x * 100)}%`; }
+    const fmtPct = (x) => isFinite(x) ? `${Math.round(x*100)}%` : "—";
 
     // -------------------------
-    // localStorage safe + settings migration
+    // localStorage helpers
     // -------------------------
     const DEFAULT_SETTINGS = {
       lang: "en",
@@ -208,32 +215,26 @@
     };
 
     function safeLSGet(key, fallback) {
-      try {
-        const raw = localStorage.getItem(key);
-        return raw == null ? fallback : JSON.parse(raw);
-      } catch { return fallback; }
+      try { const raw = localStorage.getItem(key); return raw == null ? fallback : JSON.parse(raw); }
+      catch { return fallback; }
     }
-    function safeLSSet(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
-
+    function safeLSSet(key, val) {
+      try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+    }
     function normalizeSettings(maybe) {
       const s = { ...DEFAULT_SETTINGS, ...(maybe && typeof maybe === "object" ? maybe : {}) };
-
       s.lang = (s.lang === "de" || s.lang === "en") ? s.lang : DEFAULT_SETTINGS.lang;
       s.theme = (s.theme === "light" || s.theme === "dark") ? s.theme : DEFAULT_SETTINGS.theme;
-
       s.borderIntensity = clamp(Number(s.borderIntensity ?? DEFAULT_SETTINGS.borderIntensity), 0, 1);
       s.roundsTotal = clamp(parseInt(s.roundsTotal ?? DEFAULT_SETTINGS.roundsTotal, 10), 5, 25);
-
       s.timerEnabled = !!s.timerEnabled;
       s.secondsPerRound = clamp(parseInt(s.secondsPerRound ?? DEFAULT_SETTINGS.secondsPerRound, 10), 5, 120);
-
       s.maxDifficulty = clamp(Number(s.maxDifficulty ?? DEFAULT_SETTINGS.maxDifficulty), 1, 5);
-
       return s;
     }
 
     // -------------------------
-    // geometry / stats helpers
+    // geometry helpers
     // -------------------------
     function normLonNear(lon, refLon) {
       let x = lon;
@@ -270,8 +271,6 @@
       const dx = px - cx, dy = py - cy;
       return Math.sqrt(dx*dx + dy*dy);
     }
-
-    // Distance to border (km) + inside check
     function polygonDistanceKmToBorder(pointLon, pointLat, feature) {
       const lat0 = pointLat;
       const refLon = pointLon;
@@ -304,7 +303,6 @@
           const holeXY = hole.map(([lon, lat]) => projectEquirect(lon, lat, lat0, refLon));
           if (pointInRingProjected(px, py, holeXY)) { inHole = true; break; }
         }
-
         if (inOuter && !inHole) inside = true;
 
         const ringsToMeasure = [outer, ...poly.slice(1)];
@@ -324,7 +322,6 @@
       return { inside, distKm };
     }
 
-    // Feature stats for fly-to + complexity
     function featureStats(feature) {
       const geom = feature?.geometry;
       if (!geom) return null;
@@ -416,24 +413,21 @@
       const dLon = rad(lon2 - lon1);
       const s1 = Math.sin(dLat / 2);
       const s2 = Math.sin(dLon / 2);
-      const a = s1*s1 + Math.cos(rad(lat1))*Math.cos(rad(lat2))*s2*s2;
+      const a = s1*s1 + Math.cos(rad(lat1))*s2*s2*Math.sin(dLon/2)*Math.sin(dLon/2);
       return 2 * R * Math.asin(Math.sqrt(a));
     }
 
-    function computeDifficultyForCountries(countries, idToName) {
+    function computeDifficultyForCountries(countries, idToNameEN) {
       const D = window.DIFFICULTY_MAP;
       const weights = D?.WEIGHTS ?? { familiarity: .4, geo: .3, region: .2, name: .1 };
 
-      // Precompute stats
       const statsById = new Map();
       for (const f of countries) statsById.set(String(f.id), featureStats(f));
 
-      // GEO complexity proxy: small span, many parts, many vertices => harder
-      // We'll normalize by observed distributions.
+      const ids = countries.map(f => String(f.id));
       const spans = [];
       const parts = [];
       const verts = [];
-      const ids = countries.map(f => String(f.id));
 
       for (const id of ids) {
         const st = statsById.get(id);
@@ -453,7 +447,7 @@
         return clamp((v - a) / (b - a), 0, 1);
       };
 
-      // Regional ambiguity: average distance to 5 nearest centroids (smaller distance => harder)
+      // Regional ambiguity: avg distance to 5 nearest centroids (smaller => harder)
       const centroid = ids.map(id => {
         const st = statsById.get(id);
         return st ? { id, lat: st.lat, lng: st.lng } : null;
@@ -476,37 +470,30 @@
       }
       const minN = Math.min(...distsAll), maxN = Math.max(...distsAll);
 
-      // Name ambiguity: confusable groups + similarity to other names
+      // Name ambiguity
       const nameBigrams = new Map();
-      const names = ids.map(id => (idToName.get(id) || "").trim());
-      for (let i = 0; i < ids.length; i++) nameBigrams.set(ids[i], bigramSet(names[i] || ""));
+      for (const id of ids) nameBigrams.set(id, bigramSet(idToNameEN.get(id) || ""));
 
       const nameAmb = new Map();
-      for (let i = 0; i < ids.length; i++) {
-        const idA = ids[i];
-        const nameA = idToName.get(idA) || "";
-        let best = 0;
+      for (const idA of ids) {
         const setA = nameBigrams.get(idA);
-        for (let j = 0; j < ids.length; j++) {
-          if (i === j) continue;
-          const idB = ids[j];
-          const setB = nameBigrams.get(idB);
-          best = Math.max(best, jaccard(setA, setB));
+        let best = 0;
+        for (const idB of ids) {
+          if (idA === idB) continue;
+          best = Math.max(best, jaccard(setA, nameBigrams.get(idB)));
         }
+        const nameA = idToNameEN.get(idA) || "";
         const boost = D?.nameAmbiguityBoost ? D.nameAmbiguityBoost(nameA) : 0;
-        // similarity is weak signal; boost is strong signal
         nameAmb.set(idA, clamp(0.55*boost + 0.45*best, 0, 1));
       }
 
-      // Combine
       const diffById = new Map();
       for (const id of ids) {
         const st = statsById.get(id);
-        const name = idToName.get(id) || "";
+        const nameEN = idToNameEN.get(id) || "";
 
-        const familiarity = D?.familiarityScore ? D.familiarityScore(name) : 0.45;
+        const familiarity = D?.familiarityScore ? D.familiarityScore(nameEN) : 0.45;
 
-        // geo complexity: small span is hard => invert span norm
         const spanN = st ? norm01(st.span, minSpan, maxSpan) : 0.5;
         const invSpan = 1 - spanN;
         const partsN = st ? norm01(st.parts, minParts, maxParts) : 0.0;
@@ -514,19 +501,17 @@
 
         let geo = clamp(0.55*invSpan + 0.25*partsN + 0.20*vertsN, 0, 1);
 
-        // region ambiguity: smaller neighbor distance => harder => invert
         const nAvg = neighborAvgDist.get(id);
         const nNorm = norm01(nAvg, minN, maxN);
         const region = clamp(1 - nNorm, 0, 1);
 
-        const nameA = nameAmb.get(id) ?? 0;
+        const nameScore = nameAmb.get(id) ?? 0;
 
-        // Apply optional overrides by country name
-        const o = (D?.OVERRIDES && name && D.OVERRIDES[name]) ? D.OVERRIDES[name] : null;
+        const o = (D?.OVERRIDES && nameEN && D.OVERRIDES[nameEN]) ? D.OVERRIDES[nameEN] : null;
         const fam2 = o?.familiarity != null ? clamp(o.familiarity,0,1) : familiarity;
         const geo2 = o?.geo != null ? clamp(o.geo,0,1) : geo;
         const reg2 = o?.region != null ? clamp(o.region,0,1) : region;
-        const nam2 = o?.name != null ? clamp(o.name,0,1) : nameA;
+        const nam2 = o?.name != null ? clamp(o.name,0,1) : nameScore;
 
         const mix =
           weights.familiarity * fam2 +
@@ -534,16 +519,8 @@
           weights.region      * reg2 +
           weights.name        * nam2;
 
-        // map 0..1 -> 1..5
         const difficulty = clamp(1 + 4 * mix, 1, 5);
-        diffById.set(id, {
-          familiarity: fam2,
-          geo: geo2,
-          region: reg2,
-          name: nam2,
-          mix,
-          difficulty
-        });
+        diffById.set(id, { difficulty, mix, familiarity:fam2, geo:geo2, region:reg2, name:nam2 });
       }
 
       return { diffById, statsById };
@@ -554,16 +531,11 @@
       return "★".repeat(full) + "☆".repeat(5 - full);
     }
 
-    // multiplier used for points
-    // 1..5 => 0.85..1.25
     function difficultyMultiplier(diff) {
       const t = (clamp(diff, 1, 5) - 1) / 4;
-      return 0.85 + 0.40 * t;
+      return 0.85 + 0.40 * t; // 0.85..1.25
     }
 
-    // -------------------------
-    // scoring
-    // -------------------------
     function baseScoreClick(inside, distKm) {
       if (inside) return { base: 10, distKm: 0 };
       const bins = Math.floor(distKm / 100);
@@ -576,17 +548,74 @@
     }
 
     // -------------------------
-    // UI components
+    // Learning log
     // -------------------------
-    function SettingsModal({ open, t, themeTokens, settings, setSettings, onClose }) {
-      const [draft, setDraft] = useState(settings);
+    const LEARN_KEY = "globeGuess.learnLog";
+    function readLearnLog() {
+      const obj = safeLSGet(LEARN_KEY, {});
+      return (obj && typeof obj === "object") ? obj : {};
+    }
+    function writeLearnLog(obj) { safeLSSet(LEARN_KEY, obj); }
 
-      useEffect(() => { setDraft(settings); }, [open]);
+    function updateLearnLog(countryId, wasCorrect) {
+      const id = String(countryId);
+      const log = readLearnLog();
+      const e = log[id] || { seen: 0, correct: 0, wrong: 0, last: null };
+      e.seen += 1;
+      if (wasCorrect) e.correct += 1;
+      else e.wrong += 1;
+      e.last = new Date().toISOString();
+      log[id] = e;
+      writeLearnLog(log);
+    }
+
+    function downloadCSV({ idToEN, idToDE, countries }) {
+      const log = readLearnLog();
+      const rows = [];
+      rows.push(["id","name_en","name_de","seen","correct","wrong","accuracy","last"].join(","));
+
+      const allIds = countries.map(f => String(f.id));
+      for (const id of allIds) {
+        const e = log[id];
+        if (!e) continue;
+        const en = (idToEN.get(id) || "").replaceAll('"','""');
+        const de = (idToDE.get(id) || "").replaceAll('"','""');
+        const acc = e.seen ? (e.correct / e.seen) : 0;
+        const row = [
+          id,
+          `"${en}"`,
+          `"${de}"`,
+          e.seen,
+          e.correct,
+          e.wrong,
+          acc.toFixed(3),
+          e.last ? `"${e.last}"` : ""
+        ].join(",");
+        rows.push(row);
+      }
+
+      const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "globe-guess-learning-log.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }
+
+    function resetLearnLog() { writeLearnLog({}); }
+
+    // -------------------------
+    // UI: Settings modal
+    // -------------------------
+    function SettingsModal({ open, t, themeTokens, settings, setSettings, onClose, onDownloadCSV, onResetLog }) {
+      const [draft, setDraft] = useState(settings);
+      useEffect(() => { if (open) setDraft(settings); }, [open]);
 
       if (!open) return null;
-
       const d = normalizeSettings(draft);
-
       const setD = (patch) => setDraft(prev => normalizeSettings({ ...normalizeSettings(prev), ...patch }));
 
       return (
@@ -638,7 +667,7 @@
                 </div>
 
                 <div className={["rounded-xl ring-1 p-3", themeTokens.card, themeTokens.ring].join(" ")}>
-                  <div className={["text-[11px] uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("borders")}</div>
+                  <div className={["text-[11px] uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("borderIntensity")}</div>
                   <div className="mt-2 flex items-center gap-2">
                     <input type="range" min="0" max="100"
                       value={Math.round(d.borderIntensity * 100)}
@@ -681,25 +710,22 @@
                 </div>
 
                 <div className={["rounded-xl ring-1 p-3", themeTokens.card, themeTokens.ring].join(" ")}>
-                  <div className={["text-[11px] uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("timer")}</div>
-                  <div className="mt-2 flex items-center justify-between gap-3">
-                    <div className={["text-sm", themeTokens.textMuted].join(" ")}>{t("timerEnabled")}</div>
-                    <button onClick={() => setD({ timerEnabled: !d.timerEnabled })}
-                      className={["rounded-lg px-3 py-2 text-sm ring-1 transition",
-                        d.timerEnabled ? themeTokens.btnSelected : themeTokens.btnUnselected].join(" ")}>
-                      {d.timerEnabled ? "On" : "Off"}
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className={["text-[11px] uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("learnLog")}</div>
+                      <div className={["text-xs mt-1", themeTokens.textMuted].join(" ")}>localStorage → CSV export</div>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <button onClick={onDownloadCSV} className={["flex-1 rounded-xl px-3 py-2 ring-1 transition font-semibold", themeTokens.btnPrimary].join(" ")}>
+                      {t("downloadCSV")}
+                    </button>
+                    <button onClick={onResetLog} className={["flex-1 rounded-xl px-3 py-2 ring-1 transition font-semibold", themeTokens.btnGhost].join(" ")}>
+                      {t("resetLog")}
                     </button>
                   </div>
-                  <div className="mt-3 flex items-center gap-2">
-                    <div className={["text-sm w-40", themeTokens.textMuted].join(" ")}>{t("secondsPerRound")}</div>
-                    <input type="number" min="5" max="120"
-                      value={d.secondsPerRound}
-                      disabled={!d.timerEnabled}
-                      onChange={(e) => setD({ secondsPerRound: clamp(parseInt(e.target.value || "0", 10), 5, 120) })}
-                      className={["flex-1 rounded-xl ring-1 px-3 py-2 text-sm disabled:opacity-50",
-                        themeTokens.input, themeTokens.ring].join(" ")} />
-                  </div>
                 </div>
+
               </div>
 
               <div className="mt-4 flex gap-2">
@@ -718,131 +744,8 @@
       );
     }
 
-    function RevealModal({ open, t, themeTokens, payload, onNext }) {
-      if (!open || !payload) return null;
-
-      const Row = ({ k, v }) => (
-        <div className="flex items-center justify-between gap-3">
-          <div className={["text-sm", themeTokens.textMuted].join(" ")}>{k}</div>
-          <div className={["text-sm font-semibold text-right", themeTokens.textStrong].join(" ")}>{v}</div>
-        </div>
-      );
-
-      return (
-        <div className="fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/65 backdrop-blur-sm"></div>
-          <div className="absolute inset-x-0 bottom-0 sm:inset-0 sm:flex sm:items-center sm:justify-center p-3 sm:p-6">
-            <div className={["w-full sm:max-w-lg rounded-2xl ring-1 p-5 pop", themeTokens.panel, themeTokens.ring].join(" ")}>
-              <div className="flex items-start justify-between gap-3">
-                <div className={["text-xl font-bold", themeTokens.textStrong].join(" ")}>
-                  {payload.correct ? `✅ ${t("correct")}` : `❌ ${t("wrong")}`}
-                </div>
-                <button onClick={onNext} className={["rounded-xl px-3 py-2 ring-1 transition", themeTokens.btnGhost].join(" ")}>
-                  {t("next")}
-                </button>
-              </div>
-
-              <div className={["mt-3 rounded-xl ring-1 p-3", themeTokens.card, themeTokens.ring].join(" ")}>
-                <Row k={t("correctAnswer")} v={payload.correctName} />
-                {payload.mode === "choice" && <Row k={t("yourAnswer")} v={payload.yourName} />}
-                {payload.mode === "click" && <Row k={t("distance")} v={`${Math.round(payload.distKm)} km`} />}
-              </div>
-
-              <div className={["mt-3 rounded-xl ring-1 p-3", themeTokens.card, themeTokens.ring].join(" ")}>
-                <Row k={t("difficulty")} v={`${payload.diff.toFixed(2)} / 5   ${diffStars(payload.diff)}`} />
-                <Row k={t("difficultyMult")} v={`×${payload.mult.toFixed(2)}`} />
-                <Row k={t("points")} v={`${payload.points >= 0 ? "+" : ""}${payload.points}`} />
-              </div>
-
-              <div className="mt-4">
-                <button onClick={onNext} className={["w-full rounded-xl px-4 py-3 ring-1 transition font-semibold", themeTokens.btnPrimary].join(" ")}>
-                  {t("proceed")}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    function GameOverModal({ open, t, themeTokens, stats, onClose, onPlayAgain }) {
-      if (!open || !stats) return null;
-
-      const confetti = new Array(22).fill(0).map((_, i) => ({
-        id: i,
-        left: Math.random() * 100,
-        delay: Math.random() * 0.7,
-        dur: 1.2 + Math.random() * 0.9,
-        size: 6 + Math.random() * 8
-      }));
-
-      const Card = ({ label, value }) => (
-        <div className={["rounded-2xl ring-1 p-4", themeTokens.card, themeTokens.ring].join(" ")}>
-          <div className={["text-xs uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{label}</div>
-          <div className={["mt-1 text-3xl font-bold", themeTokens.textStrong].join(" ")}>{value}</div>
-        </div>
-      );
-
-      return (
-        <div className="fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/65 backdrop-blur-sm"></div>
-
-          {confetti.map(c => (
-            <div key={c.id}
-              className="absolute top-0 rounded-sm opacity-0"
-              style={{
-                left: `${c.left}%`,
-                width: `${c.size}px`,
-                height: `${c.size * 1.2}px`,
-                background: `hsl(${Math.floor(Math.random()*360)} 85% 60%)`,
-                animation: `confettiFall ${c.dur}s ease-in ${c.delay}s 1 forwards`
-              }}
-            />
-          ))}
-
-          <div className="absolute inset-x-0 bottom-0 sm:inset-0 sm:flex sm:items-center sm:justify-center p-3 sm:p-6">
-            <div className={["w-full sm:max-w-2xl rounded-2xl ring-1 p-5 pop", themeTokens.panel, themeTokens.ring].join(" ")}>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className={["text-3xl font-extrabold", themeTokens.textStrong].join(" ")}>
-                    🎉 {t("gameOverTitle")}
-                  </div>
-                  <div className={["text-sm mt-1", themeTokens.textMuted].join(" ")}>
-                    {t("gameOverBody")}
-                  </div>
-                </div>
-                <button onClick={onClose} className={["rounded-xl px-3 py-2 ring-1 transition font-semibold", themeTokens.btnGhost].join(" ")}>
-                  {t("close")}
-                </button>
-              </div>
-
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Card label={t("score")} value={stats.score} />
-                <Card label={t("accuracy")} value={formatPct(stats.accuracy)} />
-                <Card label={t("summaryCorrect")} value={stats.correct} />
-                <Card label={t("summaryWrong")} value={stats.wrong} />
-              </div>
-
-              <div className={["mt-3 rounded-2xl ring-1 p-3", themeTokens.card, themeTokens.ring].join(" ")}>
-                <div className={["text-sm", themeTokens.textMuted].join(" ")}>
-                  {t("summaryMode")}: <span className={["font-semibold", themeTokens.textStrong].join(" ")}>{stats.mode}</span> ·
-                  {" "}{t("summaryRounds")}: <span className={["font-semibold", themeTokens.textStrong].join(" ")}>{stats.rounds}</span>
-                </div>
-              </div>
-
-              <div className="mt-4">
-                <button onClick={onPlayAgain} className={["w-full rounded-xl px-4 py-3 ring-1 transition font-semibold", themeTokens.btnPrimary].join(" ")}>
-                  {t("playAgain")}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
     // -------------------------
-    // Globe component
+    // Globe
     // -------------------------
     function GlobeView({
       countries,
@@ -853,7 +756,7 @@
       getFeatureStats,
       theme,
       borderIntensity,
-      revealTarget,
+      revealTarget,       // highlight + fly-to when true
       locked,
       clickMarker,
       targetMarker
@@ -879,32 +782,24 @@
         };
       }, [theme]);
 
-      // Keep borders stable & visible. Use only supported globe.gl APIs (no polygonStrokeWidth).
       const borderStyle = useMemo(() => {
         const I = clamp(borderIntensity ?? 0.8, 0, 1);
         if (theme === "light") {
-          const strokeA = 0.35 + 0.60 * I;   // 0.35..0.95
-          const capA    = 0.010 + 0.030 * I; // keep near transparent to avoid z-fighting
-          const targetA = 0.55 + 0.35 * I;
           return {
-            stroke: `rgba(2,6,23,${strokeA.toFixed(3)})`,
-            cap: `rgba(2,6,23,${capA.toFixed(3)})`,
-            capTarget: `rgba(16,185,129,${targetA.toFixed(3)})`,
-            capReveal: `rgba(59,130,246,${(0.60 + 0.30*I).toFixed(3)})`,
-            side: `rgba(0,0,0,0)`
-          };
-        } else {
-          const strokeA = 0.30 + 0.60 * I;   // 0.30..0.90
-          const capA    = 0.015 + 0.030 * I; // low cap alpha reduces flicker
-          const targetA = 0.55 + 0.35 * I;
-          return {
-            stroke: `rgba(226,232,240,${strokeA.toFixed(3)})`,
-            cap: `rgba(148,163,184,${capA.toFixed(3)})`,
-            capTarget: `rgba(16,185,129,${targetA.toFixed(3)})`,
-            capReveal: `rgba(96,165,250,${(0.60 + 0.30*I).toFixed(3)})`,
+            stroke: `rgba(2,6,23,${(0.35 + 0.60 * I).toFixed(3)})`,
+            cap: `rgba(2,6,23,${(0.012 + 0.028 * I).toFixed(3)})`,
+            capTarget: `rgba(16,185,129,${(0.55 + 0.35 * I).toFixed(3)})`,
+            capReveal: `rgba(59,130,246,${(0.60 + 0.30 * I).toFixed(3)})`,
             side: `rgba(0,0,0,0)`
           };
         }
+        return {
+          stroke: `rgba(226,232,240,${(0.30 + 0.60 * I).toFixed(3)})`,
+          cap: `rgba(148,163,184,${(0.015 + 0.030 * I).toFixed(3)})`,
+          capTarget: `rgba(16,185,129,${(0.55 + 0.35 * I).toFixed(3)})`,
+          capReveal: `rgba(96,165,250,${(0.60 + 0.30 * I).toFixed(3)})`,
+          side: `rgba(0,0,0,0)`
+        };
       }, [theme, borderIntensity]);
 
       useEffect(() => {
@@ -948,8 +843,8 @@
         globe.height(height);
 
         globe.pointOfView({ lat: 15, lng: 10, altitude: 2.2 }, 0);
-
         globeRef.current = globe;
+
         return () => { try { ro.disconnect(); } catch {} globeRef.current = null; };
       }, []);
 
@@ -962,27 +857,24 @@
         globe.bumpImageUrl(globeAssets.bumpImg);
       }, [globeAssets]);
 
-      // polygons + markers
       useEffect(() => {
         const globe = globeRef.current;
         if (!globe || !countries?.length) return;
 
-        // Slight cap altitude reduces z-fighting flicker
         const baseAlt = 0.014;
-        const targetAlt = 0.060;
+        const liftAlt = 0.060;
 
         globe
           .polygonsData(countries)
           .polygonCapColor(d => {
-            if (mode === "choice" && d.id === targetId) return borderStyle.capTarget;
+            if (mode === "choice" && d.id === targetId && !revealTarget) return borderStyle.capTarget;
             if (revealTarget && d.id === targetId) return borderStyle.capReveal;
             return borderStyle.cap;
           })
           .polygonSideColor(() => borderStyle.side)
           .polygonStrokeColor(() => borderStyle.stroke)
           .polygonAltitude(d => {
-            if (mode === "choice" && d.id === targetId) return targetAlt;
-            if (revealTarget && d.id === targetId) return targetAlt;
+            if ((mode === "choice" && d.id === targetId && !revealTarget) || (revealTarget && d.id === targetId)) return liftAlt;
             return baseAlt;
           })
           .polygonsTransitionDuration(reduceMotion ? 0 : 250);
@@ -1001,7 +893,7 @@
 
       }, [countries, targetId, mode, reduceMotion, borderStyle, revealTarget, clickMarker, targetMarker]);
 
-      // Click picking (sphere intersection)
+      // Click picking
       useEffect(() => {
         const el = containerRef.current;
         const globe = globeRef.current;
@@ -1051,8 +943,6 @@
           const dy = ev.clientY - g.downY;
           const dist = Math.sqrt(dx*dx + dy*dy);
           const dt = performance.now() - g.downT;
-
-          // treat as click if not a drag
           if (dist > 7 || dt > 700) return;
 
           const pt = pickLatLng(ev);
@@ -1067,11 +957,12 @@
         };
       }, [onClickLatLng, locked]);
 
-      // Choice mode fly-to (north-up)
+      // Choice mode fly-to (during question)
       useEffect(() => {
         const globe = globeRef.current;
         if (!globe || !targetId) return;
         if (mode !== "choice") return;
+        if (revealTarget) return;
 
         const st = getFeatureStats?.(targetId);
         if (!st) return;
@@ -1079,8 +970,21 @@
         const alt = altitudeFromSpan(st.span);
         try { globe.camera().up.set(0, 1, 0); } catch {}
         globe.pointOfView({ lat: st.lat, lng: st.lng, altitude: alt }, reduceMotion ? 0 : 1100);
-        try { globe.controls().update(); } catch {}
-      }, [targetId, mode, reduceMotion, getFeatureStats]);
+      }, [targetId, mode, reduceMotion, getFeatureStats, revealTarget]);
+
+      // Reveal fly-to (after answer, both modes)
+      useEffect(() => {
+        const globe = globeRef.current;
+        if (!globe || !targetId) return;
+        if (!revealTarget) return;
+
+        const st = getFeatureStats?.(targetId);
+        if (!st) return;
+
+        const alt = altitudeFromSpan(st.span);
+        try { globe.camera().up.set(0, 1, 0); } catch {}
+        globe.pointOfView({ lat: st.lat, lng: st.lng, altitude: alt }, reduceMotion ? 0 : 900);
+      }, [revealTarget, targetId, reduceMotion, getFeatureStats]);
 
       return (
         <div className="relative h-full w-full rounded-2xl overflow-hidden ring-1 ring-black/10">
@@ -1090,9 +994,6 @@
               <span className="inline-flex items-center gap-2 rounded-full bg-black/35 text-white px-3 py-1 ring-1 ring-white/10">
                 <span className="h-2 w-2 rounded-full bg-cyan-300/90"></span>
                 Drag to rotate · Scroll / pinch to zoom
-              </span>
-              <span className="hidden md:inline-flex items-center gap-2 rounded-full bg-black/20 text-white/90 px-3 py-1 ring-1 ring-white/10">
-                Tip: on mobile, use two fingers to scroll the page
               </span>
             </div>
           </div>
@@ -1152,13 +1053,16 @@
 
       // Data
       const [countries, setCountries] = useState([]);
-      const [idToName, setIdToName] = useState(new Map());
-      const [diffPack, setDiffPack] = useState(null); // { diffById, statsById }
+      const [idToEN, setIdToEN] = useState(new Map());
+      const [idToDE, setIdToDE] = useState(new Map());
+      const [diffPack, setDiffPack] = useState(null);
+
+      const activeNames = useMemo(() => settings.lang === "de" ? idToDE : idToEN, [settings.lang, idToDE, idToEN]);
 
       // Game state
       const [mode, setMode] = useState("click"); // "click" | "choice"
       const [roundIdx, setRoundIdx] = useState(0);
-      const [deck, setDeck] = useState([]); // array of country ids in round order
+      const [deck, setDeck] = useState([]);
       const [targetId, setTargetId] = useState(null);
 
       const [score, setScore] = useState(0);
@@ -1169,8 +1073,8 @@
       const [choices, setChoices] = useState([]);
       const [locked, setLocked] = useState(false);
 
-      const [revealOpen, setRevealOpen] = useState(false);
-      const [revealPayload, setRevealPayload] = useState(null);
+      // reveal state: NOT a modal, shown as an inline card
+      const [reveal, setReveal] = useState(null); // {mode, correct, correctName, yourName, distKm, diff, mult, points}
       const [revealTarget, setRevealTarget] = useState(false);
 
       const [clickMarker, setClickMarker] = useState(null);
@@ -1184,66 +1088,11 @@
         catch { return false; }
       }, []);
 
-      // Highscores
       const [highscores, setHighscores] = useState(() => safeLSGet("globeGuess.highscores", {
         click: { bestScore: 0, bestAccuracy: 0, bestStreak: 0 },
         choice: { bestScore: 0, bestAccuracy: 0, bestStreak: 0 },
       }));
-
       useEffect(() => safeLSSet("globeGuess.highscores", highscores), [highscores]);
-
-      // Load local world geometry + names
-      useEffect(() => {
-        (async () => {
-          setLoading(true);
-          setLoadErr("");
-          try {
-            const topoRes = await fetch("./data/countries-110m.json", { cache: "no-store" });
-            if (!topoRes.ok) throw new Error(`countries-110m.json HTTP ${topoRes.status}`);
-            const topo = await topoRes.json();
-
-            const geo = topojson.feature(topo, topo.objects.countries);
-            const feats = (geo?.features || []).map(f => ({
-              ...f,
-              id: String(f.id)
-            }));
-
-            // names TSV
-            const namesRes = await fetch("./data/country-names.tsv", { cache: "no-store" });
-            if (!namesRes.ok) throw new Error(`country-names.tsv HTTP ${namesRes.status}`);
-            const tsv = await namesRes.text();
-
-            const map = new Map();
-            const lines = tsv.split(/\r?\n/).filter(Boolean);
-            const header = lines[0].split("\t").map(s => s.trim().toLowerCase());
-            let idIdx = header.findIndex(h => h === "id" || h === "iso_n3" || h.includes("id"));
-            let nameIdx = header.findIndex(h => h === "name" || h.includes("country") || h.includes("admin"));
-
-            // fallback if no header
-            if (idIdx < 0 || nameIdx < 0) { idIdx = 0; nameIdx = 1; }
-
-            for (let i = 1; i < lines.length; i++) {
-              const cols = lines[i].split("\t");
-              const id = String((cols[idIdx] || "").trim());
-              const name = String((cols[nameIdx] || "").trim());
-              if (id && name) map.set(id, name);
-            }
-
-            // Filter out countries without a name (prevents “disabled option” bugs)
-            const withNames = feats.filter(f => map.has(String(f.id)));
-            setCountries(withNames);
-            setIdToName(map);
-
-            const pack = computeDifficultyForCountries(withNames, map);
-            setDiffPack(pack);
-
-            setLoading(false);
-          } catch (e) {
-            setLoadErr(String(e?.message || e));
-            setLoading(false);
-          }
-        })();
-      }, []);
 
       const getFeatureStatsById = useMemo(() => {
         if (!diffPack?.statsById) return null;
@@ -1260,8 +1109,62 @@
         return total ? correctCount / total : NaN;
       }, [correctCount, wrongCount]);
 
-      // Build a deck with "difficulty climax"
-      function buildDeckForGame(modeForDeck) {
+      // Load local geometry + TSV(id,en,de)
+      useEffect(() => {
+        (async () => {
+          setLoading(true);
+          setLoadErr("");
+          try {
+            const topoRes = await fetch("./data/countries-110m.json", { cache: "no-store" });
+            if (!topoRes.ok) throw new Error(`countries-110m.json HTTP ${topoRes.status}`);
+            const topo = await topoRes.json();
+
+            const geo = topojson.feature(topo, topo.objects.countries);
+            const feats = (geo?.features || []).map(f => ({ ...f, id: String(f.id) }));
+
+            const namesRes = await fetch("./data/country-names.tsv", { cache: "no-store" });
+            if (!namesRes.ok) throw new Error(`country-names.tsv HTTP ${namesRes.status}`);
+            const tsv = await namesRes.text();
+
+            const mapEN = new Map();
+            const mapDE = new Map();
+
+            const lines = tsv.split(/\r?\n/).filter(Boolean);
+            const header = lines[0].split("\t").map(s => s.trim().toLowerCase());
+            const idIdx = header.indexOf("id");
+            const enIdx = header.indexOf("en");
+            const deIdx = header.indexOf("de");
+            if (idIdx < 0 || enIdx < 0 || deIdx < 0) throw new Error("TSV must have columns: id, en, de");
+
+            for (let i = 1; i < lines.length; i++) {
+              const cols = lines[i].split("\t");
+              const id = String((cols[idIdx] || "").trim());
+              const en = String((cols[enIdx] || "").trim());
+              const de = String((cols[deIdx] || "").trim());
+              if (id && en) mapEN.set(id, en);
+              if (id && de) mapDE.set(id, de);
+            }
+
+            // Keep only features that exist in the reduced TSV
+            const withNames = feats.filter(f => mapEN.has(String(f.id)));
+            setCountries(withNames);
+            setIdToEN(mapEN);
+            setIdToDE(mapDE);
+
+            // Difficulty uses EN names (stable keys)
+            const pack = computeDifficultyForCountries(withNames, mapEN);
+            setDiffPack(pack);
+
+            setLoading(false);
+          } catch (e) {
+            setLoadErr(String(e?.message || e));
+            setLoading(false);
+          }
+        })();
+      }, []);
+
+      // Build deck with difficulty climax + better first-round randomness
+      function buildDeckForGame() {
         const N = settings.roundsTotal;
         const maxD = settings.maxDifficulty;
 
@@ -1269,77 +1172,86 @@
           .map(f => String(f.id))
           .filter(id => {
             const d = getDiffById?.(id)?.difficulty ?? 3;
-            return d <= maxD && idToName.has(id);
+            return d <= maxD && idToEN.has(id);
           });
 
-        // if pool too small, fallback to all named countries
-        const safePool = pool.length >= N ? pool : countries.map(f => String(f.id)).filter(id => idToName.has(id));
-
-        // sort by difficulty ascending
+        const safePool = pool.length >= N ? pool : countries.map(f => String(f.id)).filter(id => idToEN.has(id));
         const sorted = safePool.slice().sort((a, b) => (getDiffById?.(a)?.difficulty ?? 3) - (getDiffById?.(b)?.difficulty ?? 3));
 
         const minD = getDiffById?.(sorted[0])?.difficulty ?? 1;
         const maxAllowed = Math.min(maxD, getDiffById?.(sorted[sorted.length - 1])?.difficulty ?? maxD);
 
         const remaining = new Set(sorted);
-        const deckOut = [];
+        const out = [];
 
         for (let i = 0; i < N; i++) {
+          let pick;
+
+          // Round 1: random among broad easy slice (prevents “USA often first”)
+          if (i === 0) {
+            const easySlice = sorted.slice(0, Math.max(25, Math.floor(sorted.length * 0.25)));
+            pick = pickCrypto(easySlice);
+            remaining.delete(pick);
+            out.push(pick);
+            continue;
+          }
+
           const alpha = N === 1 ? 1 : (i / (N - 1));
           const targetMax = minD + (maxAllowed - minD) * alpha;
 
-          // candidates <= targetMax (climax)
           const cand = [];
           for (const id of remaining) {
             const d = getDiffById?.(id)?.difficulty ?? 3;
             if (d <= targetMax + 1e-6) cand.push(id);
           }
 
-          let pick;
           if (cand.length) {
-            // pick from the top third of candidates to steadily increase
             cand.sort((a,b)=> (getDiffById?.(a)?.difficulty ?? 3) - (getDiffById?.(b)?.difficulty ?? 3));
             const start = Math.floor(cand.length * 0.55);
             const slice = cand.slice(start);
-            pick = pickRandom(slice.length ? slice : cand);
+            pick = pickCrypto(slice.length ? slice : cand);
           } else {
-            // if none below threshold, pick easiest remaining
             const remArr = Array.from(remaining);
             remArr.sort((a,b)=> (getDiffById?.(a)?.difficulty ?? 3) - (getDiffById?.(b)?.difficulty ?? 3));
             pick = remArr[0];
           }
 
           remaining.delete(pick);
-          deckOut.push(pick);
+          out.push(pick);
         }
 
-        return deckOut;
+        return out;
       }
 
-      // Prepare choices (8 options)
       function buildChoices(target) {
-        const targetName = idToName.get(String(target));
-        const pool = countries.map(f => String(f.id)).filter(id => id !== String(target) && idToName.has(id));
+        const targetIdStr = String(target);
+        const pool = countries.map(f => String(f.id)).filter(id => id !== targetIdStr && idToEN.has(id));
 
-        // sample 7 distractors, prefer similar difficulty
-        const targetDiff = getDiffById?.(target)?.difficulty ?? 3;
+        const targetDiff = getDiffById?.(targetIdStr)?.difficulty ?? 3;
         const near = pool
           .map(id => ({ id, d: getDiffById?.(id)?.difficulty ?? 3 }))
           .sort((a,b)=> Math.abs(a.d - targetDiff) - Math.abs(b.d - targetDiff))
-          .slice(0, Math.min(80, pool.length))
+          .slice(0, Math.min(100, pool.length))
           .map(x => x.id);
 
-        const distractors = shuffle(near).slice(0, 7);
-        const all = shuffle([String(target), ...distractors]).map(id => ({
+        const distractors = shuffleCrypto(near).slice(0, 7);
+        return shuffleCrypto([targetIdStr, ...distractors]).map(id => ({
           id,
-          name: idToName.get(id),
-          correct: id === String(target)
+          name: activeNames.get(id) || idToEN.get(id) || id,
+          correct: id === targetIdStr
         }));
-        return all;
+      }
+
+      function resetRoundUI() {
+        setReveal(null);
+        setRevealTarget(false);
+        setLocked(false);
+        setClickMarker(null);
+        setTargetMarker(null);
       }
 
       function resetGame(newMode = mode) {
-        if (!countries.length || !idToName.size || !getDiffById) return;
+        if (!countries.length || !idToEN.size || !getDiffById) return;
 
         setMode(newMode);
         setScore(0);
@@ -1347,34 +1259,37 @@
         setCorrectCount(0);
         setWrongCount(0);
         setRoundIdx(0);
-        setRevealOpen(false);
-        setRevealPayload(null);
-        setRevealTarget(false);
-        setLocked(false);
-        setClickMarker(null);
-        setTargetMarker(null);
+        resetRoundUI();
         setGameOverOpen(false);
 
-        const d = buildDeckForGame(newMode);
+        const d = buildDeckForGame();
         setDeck(d);
         const first = d[0];
         setTargetId(first);
-
         if (newMode === "choice") setChoices(buildChoices(first));
         else setChoices([]);
       }
 
-      // Start first game once data ready (only once)
+      // start initial game once ready
       useEffect(() => {
-        if (!loading && !loadErr && countries.length && idToName.size && getDiffById && deck.length === 0) {
+        if (!loading && !loadErr && countries.length && idToEN.size && getDiffById && deck.length === 0) {
           resetGame("click");
         }
-      }, [loading, loadErr, countries.length, idToName.size, !!getDiffById]);
+      }, [loading, loadErr, countries.length, idToEN.size, !!getDiffById]);
+
+      // rebuild choices when language changes (so buttons show DE/EN)
+      useEffect(() => {
+        if (!targetId) return;
+        if (mode === "choice" && !reveal && choices.length) {
+          setChoices(buildChoices(targetId));
+        }
+      }, [settings.lang]);
 
       function endGame() {
         const total = correctCount + wrongCount;
         const acc = total ? correctCount / total : 0;
         const hsKey = mode;
+
         setHighscores(prev => {
           const old = prev[hsKey] || { bestScore: 0, bestAccuracy: 0, bestStreak: 0 };
           return {
@@ -1386,16 +1301,12 @@
             }
           };
         });
+
         setGameOverOpen(true);
       }
 
       function gotoNextQuestion() {
-        setRevealOpen(false);
-        setRevealPayload(null);
-        setRevealTarget(false);
-        setLocked(false);
-        setClickMarker(null);
-        setTargetMarker(null);
+        resetRoundUI();
 
         const nextIdx = roundIdx + 1;
         if (nextIdx >= settings.roundsTotal) {
@@ -1411,52 +1322,45 @@
         else setChoices([]);
       }
 
-      // Timer (optional) — when expires, counts as wrong and reveals
+      // Timer (optional)
       useEffect(() => {
         if (!settings.timerEnabled) return;
-        if (locked || revealOpen || gameOverOpen) return;
+        if (locked || reveal || gameOverOpen) return;
         if (!targetId) return;
 
         const ms = settings.secondsPerRound * 1000;
         const timer = setTimeout(() => {
-          // auto-fail
-          if (mode === "choice") {
-            onChoiceSelect({ id: "__timeout__", name: "—", correct: false }, true);
-          } else {
-            onGlobeClick({ lat: 0, lng: 0 }, true); // special fail
-          }
+          if (mode === "choice") onChoiceSelect({ id: "__timeout__", name: "⏱️", correct: false }, true);
+          else onGlobeClick(null, true);
         }, ms);
 
         return () => clearTimeout(timer);
-      }, [settings.timerEnabled, settings.secondsPerRound, locked, revealOpen, gameOverOpen, targetId, mode]);
+      }, [settings.timerEnabled, settings.secondsPerRound, locked, !!reveal, gameOverOpen, targetId, mode]);
 
-      // Click mode handler
-      function onGlobeClick({ lat, lng }, isTimeout = false) {
-        if (locked || revealOpen || mode !== "click") return;
+      function onGlobeClick(pt, isTimeout = false) {
+        if (locked || reveal || mode !== "click") return;
         if (!targetId) return;
 
         setLocked(true);
 
         const feature = countries.find(f => String(f.id) === String(targetId));
-        const dInfo = getDiffById?.(targetId);
-        const diff = dInfo?.difficulty ?? 3;
+        const diff = getDiffById?.(targetId)?.difficulty ?? 3;
         const mult = difficultyMultiplier(diff);
 
-        const click = isTimeout ? null : { lat, lng };
-        if (click) setClickMarker({ lat, lng });
+        if (!isTimeout && pt) setClickMarker({ lat: pt.lat, lng: pt.lng });
 
-        // show target marker at centroid for learning
+        // marker for target centroid
         const st = getFeatureStatsById?.(targetId);
         if (st) setTargetMarker({ lat: st.lat, lng: st.lng });
 
-        const { inside, distKm } = (click && feature)
-          ? polygonDistanceKmToBorder(lng, lat, feature)
+        const click = (!isTimeout && pt && feature)
+          ? polygonDistanceKmToBorder(pt.lng, pt.lat, feature)
           : { inside: false, distKm: 99999 };
 
-        const { base } = baseScoreClick(inside, distKm);
+        const { base } = baseScoreClick(click.inside, click.distKm);
         const points = Math.round(base * mult);
+        const correct = click.inside;
 
-        const correct = inside; // click mode "correct" = inside border
         setScore(s => s + points);
         if (correct) {
           setCorrectCount(c => c + 1);
@@ -1466,72 +1370,67 @@
           setStreak(0);
         }
 
-        // reveal correct country highlight
+        updateLearnLog(targetId, correct);
+
+        // AFTER answer: fly-to + highlight correct country (learning)
         setRevealTarget(true);
 
-        setRevealPayload({
+        const correctName = activeNames.get(String(targetId)) || idToEN.get(String(targetId)) || "—";
+        setReveal({
           mode: "click",
           correct,
-          correctName: idToName.get(String(targetId)) || "—",
+          correctName,
           yourName: "",
-          distKm: isTimeout ? 99999 : distKm,
+          distKm: click.distKm,
           diff,
           mult,
           points
         });
-        setRevealOpen(true);
       }
 
-      // Choice mode handler
       function onChoiceSelect(opt, isTimeout = false) {
-        if (locked || revealOpen || mode !== "choice") return;
+        if (locked || reveal || mode !== "choice") return;
         if (!targetId) return;
 
         setLocked(true);
 
         const correct = !!opt?.correct;
-        const dInfo = getDiffById?.(targetId);
-        const diff = dInfo?.difficulty ?? 3;
+        const diff = getDiffById?.(targetId)?.difficulty ?? 3;
         const mult = difficultyMultiplier(diff);
 
+        const newStreak = correct ? (streak + 1) : 0;
+        const base = baseScoreChoice({ correct, newStreak });
+        const points = Math.round(base * mult);
+
+        setScore(s => s + points);
+        if (correct) {
+          setCorrectCount(c => c + 1);
+          setStreak(newStreak);
+        } else {
+          setWrongCount(w => w + 1);
+          setStreak(0);
+        }
+
+        updateLearnLog(targetId, correct);
+
+        // learning: always fly-to correct country & highlight (even if correct, it's quick)
         setRevealTarget(true);
 
-        setScore(s => {
-          const newStreak = correct ? (streak + 1) : 0;
-          const base = baseScoreChoice({ correct, newStreak });
-          const points = Math.round(base * mult);
-
-          // update streak/correct/wrong
-          if (correct) {
-            setCorrectCount(c => c + 1);
-            setStreak(newStreak);
-          } else {
-            setWrongCount(w => w + 1);
-            setStreak(0);
-          }
-
-          setRevealPayload({
-            mode: "choice",
-            correct,
-            correctName: idToName.get(String(targetId)) || "—",
-            yourName: isTimeout ? "⏱️" : (opt?.name || "—"),
-            distKm: 0,
-            diff,
-            mult,
-            points
-          });
-          setRevealOpen(true);
-
-          return s + points;
+        const correctName = activeNames.get(String(targetId)) || idToEN.get(String(targetId)) || "—";
+        setReveal({
+          mode: "choice",
+          correct,
+          correctName,
+          yourName: isTimeout ? "⏱️" : (opt?.name || "—"),
+          distKm: 0,
+          diff,
+          mult,
+          points
         });
       }
 
-      // Switch mode mid-game => start new game
-      function setModeAndRestart(m) {
-        resetGame(m);
-      }
+      function setModeAndRestart(m) { resetGame(m); }
 
-      // Highscore reset
       function resetHighscores() {
         setHighscores({
           click: { bestScore: 0, bestAccuracy: 0, bestStreak: 0 },
@@ -1539,10 +1438,9 @@
         });
       }
 
-      const currentName = targetId ? (idToName.get(String(targetId)) || "—") : "—";
+      const currentName = targetId ? (activeNames.get(String(targetId)) || idToEN.get(String(targetId)) || "—") : "—";
       const currentDiff = targetId ? (getDiffById?.(targetId)?.difficulty ?? 3) : 3;
       const currentMult = difficultyMultiplier(currentDiff);
-
       const roundLabel = `${roundIdx + 1}/${settings.roundsTotal}`;
 
       if (loading) {
@@ -1583,7 +1481,7 @@
                 theme={settings.theme}
                 borderIntensity={settings.borderIntensity}
                 revealTarget={revealTarget}
-                locked={locked || revealOpen || gameOverOpen}
+                locked={locked || !!reveal || gameOverOpen}
                 clickMarker={clickMarker}
                 targetMarker={targetMarker}
               />
@@ -1613,7 +1511,7 @@
                   </div>
                   <div className={["rounded-2xl ring-1 p-3", themeTokens.card, themeTokens.ring].join(" ")}>
                     <div className={["text-[10px] uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("accuracy")}</div>
-                    <div className={["text-2xl font-bold", themeTokens.textStrong].join(" ")}>{formatPct(accuracy)}</div>
+                    <div className={["text-2xl font-bold", themeTokens.textStrong].join(" ")}>{fmtPct(accuracy)}</div>
                   </div>
                   <div className={["rounded-2xl ring-1 p-3", themeTokens.card, themeTokens.ring].join(" ")}>
                     <div className={["text-[10px] uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("mode")}</div>
@@ -1624,26 +1522,22 @@
                 </div>
 
                 <div className={["mt-3 rounded-2xl ring-1 p-4", themeTokens.card, themeTokens.ring].join(" ")}>
-                  <div className={["text-[11px] uppercase tracking-wide", themeTokens.textMuted].join(" ")}>
-                    {t("difficultyClimax")}
-                  </div>
-                  <div className={["text-xs mt-1", themeTokens.textMuted].join(" ")}>
-                    {t("difficultyClimaxHint")}
-                  </div>
-
-                  <div className="mt-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center justify-between gap-3">
                     <div>
-                      <div className={["text-sm", themeTokens.textMuted].join(" ")}>{t("difficulty")}</div>
-                      <div className={["text-lg font-bold", themeTokens.textStrong].join(" ")}>
-                        {currentDiff.toFixed(2)} / 5 &nbsp; <span className="text-base">{diffStars(currentDiff)}</span>
+                      <div className={["text-[11px] uppercase tracking-wide", themeTokens.textMuted].join(" ")}>
+                        {t("difficultyClimax")}
                       </div>
                       <div className={["text-xs mt-1", themeTokens.textMuted].join(" ")}>
-                        {t("difficultyMult")}: <span className={["font-semibold", themeTokens.textStrong].join(" ")}>×{currentMult.toFixed(2)}</span>
+                        {t("difficultyClimaxHint")}
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className={["text-sm", themeTokens.textMuted].join(" ")}>
-                        {t("round")} {roundLabel}
+                      <div className={["text-sm font-bold", themeTokens.textStrong].join(" ")}>
+                        {currentDiff.toFixed(2)}/5
+                      </div>
+                      <div className={["text-xs", themeTokens.textMuted].join(" ")}>{diffStars(currentDiff)}</div>
+                      <div className={["text-xs mt-1", themeTokens.textMuted].join(" ")}>
+                        {t("difficultyMult")}: <span className={["font-semibold", themeTokens.textStrong].join(" ")}>×{currentMult.toFixed(2)}</span>
                       </div>
                     </div>
                   </div>
@@ -1671,11 +1565,11 @@
                           {choices.map((opt) => (
                             <button
                               key={`${roundIdx}-${opt.id}`}
-                              disabled={locked || revealOpen}
+                              disabled={locked || !!reveal}
                               onClick={() => onChoiceSelect(opt, false)}
                               className={[
                                 "rounded-2xl px-3 py-3 ring-1 transition font-semibold text-sm",
-                                (locked || revealOpen) ? "opacity-60 cursor-not-allowed" : "",
+                                (locked || !!reveal) ? "opacity-60 cursor-not-allowed" : "",
                                 themeTokens.btnGhost
                               ].join(" ")}
                             >
@@ -1691,6 +1585,62 @@
                     )}
                   </div>
                 </div>
+
+                {/* Inline learning reveal card (NOT hiding globe) */}
+                {reveal && (
+                  <div className={["mt-3 rounded-2xl ring-1 p-4 pop", themeTokens.panel, themeTokens.ring].join(" ")}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className={["text-lg font-extrabold", themeTokens.textStrong].join(" ")}>
+                        {reveal.correct ? `✅ ${t("correct")}` : `❌ ${t("wrong")}`}
+                      </div>
+                      <button onClick={gotoNextQuestion} className={["rounded-xl px-3 py-2 ring-1 transition font-semibold", themeTokens.btnPrimary].join(" ")}>
+                        {t("next")}
+                      </button>
+                    </div>
+
+                    <div className={["mt-3 rounded-xl ring-1 p-3", themeTokens.card, themeTokens.ring].join(" ")}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className={["text-sm", themeTokens.textMuted].join(" ")}>{t("correctAnswer")}</div>
+                        <div className={["text-sm font-semibold text-right", themeTokens.textStrong].join(" ")}>{reveal.correctName}</div>
+                      </div>
+                      {reveal.mode === "choice" && (
+                        <div className="flex items-center justify-between gap-3 mt-2">
+                          <div className={["text-sm", themeTokens.textMuted].join(" ")}>{t("yourAnswer")}</div>
+                          <div className={["text-sm font-semibold text-right", themeTokens.textStrong].join(" ")}>{reveal.yourName}</div>
+                        </div>
+                      )}
+                      {reveal.mode === "click" && (
+                        <div className="flex items-center justify-between gap-3 mt-2">
+                          <div className={["text-sm", themeTokens.textMuted].join(" ")}>{t("distance")}</div>
+                          <div className={["text-sm font-semibold text-right", themeTokens.textStrong].join(" ")}>{Math.round(reveal.distKm)} km</div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className={["mt-3 rounded-xl ring-1 p-3", themeTokens.card, themeTokens.ring].join(" ")}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className={["text-sm", themeTokens.textMuted].join(" ")}>{t("difficulty")}</div>
+                        <div className={["text-sm font-semibold text-right", themeTokens.textStrong].join(" ")}>
+                          {reveal.diff.toFixed(2)}/5 &nbsp; <span className="text-xs">{diffStars(reveal.diff)}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 mt-2">
+                        <div className={["text-sm", themeTokens.textMuted].join(" ")}>{t("difficultyMult")}</div>
+                        <div className={["text-sm font-semibold text-right", themeTokens.textStrong].join(" ")}>×{reveal.mult.toFixed(2)}</div>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 mt-2">
+                        <div className={["text-sm", themeTokens.textMuted].join(" ")}>{t("points")}</div>
+                        <div className={["text-sm font-extrabold text-right", themeTokens.textStrong].join(" ")}>
+                          {reveal.points >= 0 ? "+" : ""}{reveal.points}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={["mt-3 text-xs", themeTokens.textMuted].join(" ")}>
+                      After answering, the globe flies to the correct country (learning).
+                    </div>
+                  </div>
+                )}
 
                 <div className="mt-3 flex gap-2">
                   <button onClick={() => resetGame(mode)} className={["flex-1 rounded-xl px-4 py-3 ring-1 transition font-semibold", themeTokens.btnPrimary].join(" ")}>
@@ -1728,7 +1678,7 @@
                           Best score: <span className={["font-semibold", themeTokens.textStrong].join(" ")}>{hs.bestScore}</span>
                         </div>
                         <div className={["text-sm", themeTokens.textMuted].join(" ")}>
-                          Best accuracy: <span className={["font-semibold", themeTokens.textStrong].join(" ")}>{formatPct(hs.bestAccuracy)}</span>
+                          Best accuracy: <span className={["font-semibold", themeTokens.textStrong].join(" ")}>{fmtPct(hs.bestAccuracy)}</span>
                         </div>
                         <div className={["text-sm", themeTokens.textMuted].join(" ")}>
                           Best streak: <span className={["font-semibold", themeTokens.textStrong].join(" ")}>{hs.bestStreak}</span>
@@ -1747,6 +1697,47 @@
                   </ul>
                 </div>
               </div>
+
+              {/* Simple Game Over card (also not hiding globe) */}
+              {gameOverOpen && (
+                <div className={["rounded-2xl ring-1 p-4 pop", themeTokens.panel, themeTokens.ring].join(" ")}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className={["text-2xl font-extrabold", themeTokens.textStrong].join(" ")}>🎉 {t("gameOverTitle")}</div>
+                      <div className={["text-sm mt-1", themeTokens.textMuted].join(" ")}>{t("gameOverBody")}</div>
+                    </div>
+                    <button onClick={() => setGameOverOpen(false)} className={["rounded-xl px-3 py-2 ring-1 transition font-semibold", themeTokens.btnGhost].join(" ")}>
+                      {t("close")}
+                    </button>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <div className={["rounded-2xl ring-1 p-4", themeTokens.card, themeTokens.ring].join(" ")}>
+                      <div className={["text-xs uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("score")}</div>
+                      <div className={["mt-1 text-3xl font-bold", themeTokens.textStrong].join(" ")}>{score}</div>
+                    </div>
+                    <div className={["rounded-2xl ring-1 p-4", themeTokens.card, themeTokens.ring].join(" ")}>
+                      <div className={["text-xs uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("accuracy")}</div>
+                      <div className={["mt-1 text-3xl font-bold", themeTokens.textStrong].join(" ")}>{fmtPct(accuracy)}</div>
+                    </div>
+                    <div className={["rounded-2xl ring-1 p-4", themeTokens.card, themeTokens.ring].join(" ")}>
+                      <div className={["text-xs uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("summaryCorrect")}</div>
+                      <div className={["mt-1 text-3xl font-bold", themeTokens.textStrong].join(" ")}>{correctCount}</div>
+                    </div>
+                    <div className={["rounded-2xl ring-1 p-4", themeTokens.card, themeTokens.ring].join(" ")}>
+                      <div className={["text-xs uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("summaryWrong")}</div>
+                      <div className={["mt-1 text-3xl font-bold", themeTokens.textStrong].join(" ")}>{wrongCount}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <button onClick={() => { setGameOverOpen(false); resetGame(mode); }}
+                      className={["w-full rounded-xl px-4 py-3 ring-1 transition font-semibold", themeTokens.btnPrimary].join(" ")}>
+                      {t("playAgain")}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1758,34 +1749,11 @@
             setSettings={(s) => {
               const ns = normalizeSettings(s);
               setSettings(ns);
-              // if game is running, rebuild deck to respect difficulty setting (but keep mode)
-              resetGame(mode);
+              resetGame(mode); // rebuild with difficulty setting, new language etc.
             }}
             onClose={() => setSettingsOpen(false)}
-          />
-
-          <RevealModal
-            open={revealOpen}
-            t={t}
-            themeTokens={themeTokens}
-            payload={revealPayload}
-            onNext={gotoNextQuestion}
-          />
-
-          <GameOverModal
-            open={gameOverOpen}
-            t={t}
-            themeTokens={themeTokens}
-            stats={{
-              score,
-              accuracy,
-              correct: correctCount,
-              wrong: wrongCount,
-              mode: mode === "click" ? t("clickMode") : t("choiceMode"),
-              rounds: settings.roundsTotal
-            }}
-            onClose={() => setGameOverOpen(false)}
-            onPlayAgain={() => { setGameOverOpen(false); resetGame(mode); }}
+            onDownloadCSV={() => downloadCSV({ idToEN, idToDE, countries })}
+            onResetLog={() => resetLearnLog()}
           />
         </div>
       );
