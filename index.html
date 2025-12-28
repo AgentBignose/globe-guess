@@ -8,9 +8,17 @@
   <style>
     html, body { height: 100%; }
     body { margin: 0; overscroll-behavior: none; }
+    #root { height: 100%; }
     * { -webkit-tap-highlight-color: transparent; }
     @keyframes pop { 0%{transform:scale(.98);opacity:0} 100%{transform:scale(1);opacity:1} }
     .pop { animation: pop .16s ease-out; }
+    /* 2-line clamp */
+    .clamp2{
+      display:-webkit-box;
+      -webkit-line-clamp:2;
+      -webkit-box-orient:vertical;
+      overflow:hidden;
+    }
   </style>
 </head>
 <body>
@@ -35,7 +43,7 @@
     const { useEffect, useMemo, useRef, useState } = React;
 
     // -------------------------
-    // crypto RNG (better randomness)
+    // crypto RNG
     // -------------------------
     function randInt(n) {
       if (n <= 0) return 0;
@@ -54,12 +62,11 @@
     }
 
     // -------------------------
-    // i18n (UI only)
+    // i18n
     // -------------------------
     const I18N = {
       en: {
         title: "Globe Guess",
-        subtitle: "Two modes: click the named country, or pick the right name from 8 options.",
         round: "Round",
         score: "Score",
         streak: "Streak",
@@ -77,13 +84,8 @@
         theme: "Theme",
         dark: "Dark",
         light: "Light",
-        borders: "Borders",
         borderIntensity: "Border intensity",
         roundsPerGame: "Rounds per game",
-        timer: "Timer",
-        timerEnabled: "Enable timer",
-        secondsPerRound: "Seconds per round",
-        difficulty: "Difficulty",
         maxDifficulty: "Max difficulty",
         difficultyHint: "Limits the hardest countries in your pool (1..5).",
         next: "Next",
@@ -92,41 +94,34 @@
         distance: "Distance",
         points: "Points",
         findAndClick: "Find and click:",
-        clickAnywhere: "Click anywhere on the globe. Score is based on distance to the border.",
+        clickAnywhere: "Tap the globe. Score is based on distance to the border.",
         highlightedIs: "The highlighted country is:",
-        highlightHint: "(It flies to center + zoom depends on size)",
         loading: "Loading globe…",
         loadFailTitle: "Couldn’t load data",
         loadFailTip: "Host locally: ./data/countries-110m.json and ./data/country-names.tsv (id,en,de)",
         correct: "Correct!",
         wrong: "Wrong",
         gameOverTitle: "Game Over",
-        gameOverBody: "Here are your stats.",
         playAgain: "Play again",
-        summaryMode: "Mode",
-        summaryRounds: "Rounds",
         summaryCorrect: "Correct",
         summaryWrong: "Wrong",
         highscore: "Highscores",
         reset: "Reset",
         howTo: "How it works",
-        howClick: "Click Mode: you’re told a country name; click/tap on the globe.",
-        howChoice: "Choice Mode: the correct country is raised/green; pick its name from 8 options.",
-        howDrag: "Drag to rotate, pinch/scroll to zoom.",
-        pointsRuleClick: "Click: inside=10, outside=max(0,10-floor(distance_km/100))",
+        howClick: "Click: name shown → tap on globe.",
+        howChoice: "Choice: country highlighted → pick name from 8.",
+        howDrag: "Drag to rotate · pinch/scroll to zoom",
+        pointsRuleClick: "Click: inside=10, outside=max(0,10-floor(km/100))",
         pointsRuleChoice: "Choice: correct=100 + 15*(streak-1), wrong=-25",
         difficultyMult: "Difficulty multiplier",
-        revealTitle: "Answer",
-        proceed: "Continue",
-        difficultyClimax: "Difficulty climax",
-        difficultyClimaxHint: "Easier early rounds, harder later rounds.",
+        difficultyClimax: "Difficulty climb",
         learnLog: "Learning log",
         downloadCSV: "Download CSV",
-        resetLog: "Reset log"
+        resetLog: "Reset log",
+        learningAid: "Learning aid: dashed arc shows shortest path; label shows distance."
       },
       de: {
         title: "Globus-Quiz",
-        subtitle: "Zwei Modi: Klicke das genannte Land oder wähle den richtigen Namen aus 8 Optionen.",
         round: "Runde",
         score: "Punkte",
         streak: "Serie",
@@ -144,13 +139,8 @@
         theme: "Theme",
         dark: "Dunkel",
         light: "Hell",
-        borders: "Grenzen",
         borderIntensity: "Grenz-Intensität",
         roundsPerGame: "Runden pro Spiel",
-        timer: "Timer",
-        timerEnabled: "Timer aktivieren",
-        secondsPerRound: "Sekunden pro Runde",
-        difficulty: "Schwierigkeit",
         maxDifficulty: "Max. Schwierigkeit",
         difficultyHint: "Begrenzt die schwierigsten Länder im Pool (1..5).",
         next: "Weiter",
@@ -159,37 +149,31 @@
         distance: "Distanz",
         points: "Punkte",
         findAndClick: "Finde und klicke:",
-        clickAnywhere: "Klicke irgendwo auf den Globus. Punkte basieren auf Distanz zur Grenze.",
+        clickAnywhere: "Tippe auf den Globus. Punkte basieren auf Distanz zur Grenze.",
         highlightedIs: "Das markierte Land ist:",
-        highlightHint: "(Fliegt ins Zentrum + Zoom je nach Größe)",
         loading: "Globus wird geladen…",
         loadFailTitle: "Daten konnten nicht geladen werden",
         loadFailTip: "Lokal hosten: ./data/countries-110m.json und ./data/country-names.tsv (id,en,de)",
         correct: "Richtig!",
         wrong: "Falsch",
         gameOverTitle: "Spiel vorbei",
-        gameOverBody: "Hier sind deine Statistiken.",
         playAgain: "Nochmal spielen",
-        summaryMode: "Modus",
-        summaryRounds: "Runden",
         summaryCorrect: "Richtig",
         summaryWrong: "Falsch",
         highscore: "Highscores",
         reset: "Reset",
         howTo: "So funktioniert’s",
-        howClick: "Klick-Modus: Du bekommst einen Ländernamen und klickst/tippst auf den Globus.",
-        howChoice: "Auswahl-Modus: Das richtige Land ist erhöht/grün; wähle den Namen aus 8 Optionen.",
-        howDrag: "Ziehen zum Drehen, Pinch/Scroll zum Zoomen.",
-        pointsRuleClick: "Klick: innen=10, außen=max(0,10-floor(distanz_km/100))",
+        howClick: "Klick: Name angezeigt → Globus tippen.",
+        howChoice: "Auswahl: Land markiert → Name aus 8 wählen.",
+        howDrag: "Ziehen zum Drehen · Pinch/Scroll zum Zoomen",
+        pointsRuleClick: "Klick: innen=10, außen=max(0,10-floor(km/100))",
         pointsRuleChoice: "Auswahl: richtig=100 + 15*(serie-1), falsch=-25",
         difficultyMult: "Schwierigkeits-Multiplikator",
-        revealTitle: "Antwort",
-        proceed: "Weiter",
-        difficultyClimax: "Schwierigkeits-Klimax",
-        difficultyClimaxHint: "Leicht am Anfang, später schwieriger.",
+        difficultyClimax: "Schwierigkeit steigt",
         learnLog: "Lernprotokoll",
         downloadCSV: "CSV herunterladen",
-        resetLog: "Protokoll löschen"
+        resetLog: "Protokoll löschen",
+        learningAid: "Lernhilfe: gestrichelter Bogen zeigt kürzesten Weg; Label zeigt Distanz."
       }
     };
 
@@ -213,7 +197,6 @@
       secondsPerRound: 20,
       maxDifficulty: 5.0
     };
-
     function safeLSGet(key, fallback) {
       try { const raw = localStorage.getItem(key); return raw == null ? fallback : JSON.parse(raw); }
       catch { return fallback; }
@@ -392,7 +375,6 @@
       return clamp(alt, 1.05, 2.8);
     }
 
-    // Midpoint for label (simple spherical midpoint)
     function midPointLatLng(a, b) {
       const lat1 = rad(a.lat), lon1 = rad(a.lng);
       const lat2 = rad(b.lat), lon2 = rad(b.lng);
@@ -452,13 +434,10 @@
       const spans = [];
       const parts = [];
       const verts = [];
-
       for (const id of ids) {
         const st = statsById.get(id);
         if (!st) continue;
-        spans.push(st.span);
-        parts.push(st.parts);
-        verts.push(st.vertices);
+        spans.push(st.span); parts.push(st.parts); verts.push(st.vertices);
       }
 
       const minSpan = Math.min(...spans), maxSpan = Math.max(...spans);
@@ -478,7 +457,6 @@
 
       const neighborAvgDist = new Map();
       const distsAll = [];
-
       for (const a of centroid) {
         const dists = [];
         for (const b of centroid) {
@@ -513,20 +491,17 @@
       for (const id of ids) {
         const st = statsById.get(id);
         const nameEN = idToNameEN.get(id) || "";
-
         const familiarity = D?.familiarityScore ? D.familiarityScore(nameEN) : 0.45;
 
         const spanN = st ? norm01(st.span, minSpan, maxSpan) : 0.5;
         const invSpan = 1 - spanN;
         const partsN = st ? norm01(st.parts, minParts, maxParts) : 0.0;
         const vertsN = st ? norm01(st.vertices, minVerts, maxVerts) : 0.5;
-
-        let geo = clamp(0.55*invSpan + 0.25*partsN + 0.20*vertsN, 0, 1);
+        const geo = clamp(0.55*invSpan + 0.25*partsN + 0.20*vertsN, 0, 1);
 
         const nAvg = neighborAvgDist.get(id);
         const nNorm = norm01(nAvg, minN, maxN);
         const region = clamp(1 - nNorm, 0, 1);
-
         const nameScore = nameAmb.get(id) ?? 0;
 
         const o = (D?.OVERRIDES && nameEN && D.OVERRIDES[nameEN]) ? D.OVERRIDES[nameEN] : null;
@@ -542,9 +517,8 @@
           weights.name        * nam2;
 
         const difficulty = clamp(1 + 4 * mix, 1, 5);
-        diffById.set(id, { difficulty, mix, familiarity:fam2, geo:geo2, region:reg2, name:nam2 });
+        diffById.set(id, { difficulty, mix });
       }
-
       return { diffById, statsById };
     }
 
@@ -552,10 +526,9 @@
       const full = clamp(Math.round(diff), 1, 5);
       return "★".repeat(full) + "☆".repeat(5 - full);
     }
-
     function difficultyMultiplier(diff) {
       const t = (clamp(diff, 1, 5) - 1) / 4;
-      return 0.85 + 0.40 * t; // 0.85..1.25
+      return 0.85 + 0.40 * t;
     }
 
     function baseScoreClick(inside, distKm) {
@@ -578,24 +551,20 @@
       return (obj && typeof obj === "object") ? obj : {};
     }
     function writeLearnLog(obj) { safeLSSet(LEARN_KEY, obj); }
-
     function updateLearnLog(countryId, wasCorrect) {
       const id = String(countryId);
       const log = readLearnLog();
       const e = log[id] || { seen: 0, correct: 0, wrong: 0, last: null };
       e.seen += 1;
-      if (wasCorrect) e.correct += 1;
-      else e.wrong += 1;
+      if (wasCorrect) e.correct += 1; else e.wrong += 1;
       e.last = new Date().toISOString();
       log[id] = e;
       writeLearnLog(log);
     }
-
     function downloadCSV({ idToEN, idToDE, countries }) {
       const log = readLearnLog();
       const rows = [];
       rows.push(["id","name_en","name_de","seen","correct","wrong","accuracy","last"].join(","));
-
       const allIds = countries.map(f => String(f.id));
       for (const id of allIds) {
         const e = log[id];
@@ -603,19 +572,8 @@
         const en = (idToEN.get(id) || "").replaceAll('"','""');
         const de = (idToDE.get(id) || "").replaceAll('"','""');
         const acc = e.seen ? (e.correct / e.seen) : 0;
-        const row = [
-          id,
-          `"${en}"`,
-          `"${de}"`,
-          e.seen,
-          e.correct,
-          e.wrong,
-          acc.toFixed(3),
-          e.last ? `"${e.last}"` : ""
-        ].join(",");
-        rows.push(row);
+        rows.push([id, `"${en}"`, `"${de}"`, e.seen, e.correct, e.wrong, acc.toFixed(3), e.last ? `"${e.last}"` : ""].join(","));
       }
-
       const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -626,17 +584,16 @@
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1500);
     }
-
     function resetLearnLog() { writeLearnLog({}); }
 
     // -------------------------
-    // UI: Settings modal
+    // Settings modal
     // -------------------------
     function SettingsModal({ open, t, themeTokens, settings, setSettings, onClose, onDownloadCSV, onResetLog }) {
       const [draft, setDraft] = useState(settings);
       useEffect(() => { if (open) setDraft(settings); }, [open]);
-
       if (!open) return null;
+
       const d = normalizeSettings(draft);
       const setD = (patch) => setDraft(prev => normalizeSettings({ ...normalizeSettings(prev), ...patch }));
 
@@ -646,10 +603,7 @@
           <div className="absolute inset-x-0 bottom-0 sm:inset-0 sm:flex sm:items-center sm:justify-center p-3 sm:p-6">
             <div className={["w-full sm:max-w-lg rounded-2xl ring-1 p-4 sm:p-5 pop", themeTokens.panel, themeTokens.ring].join(" ")}>
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className={["text-xl font-bold", themeTokens.textStrong].join(" ")}>{t("settings")}</div>
-                  <div className={["text-sm mt-1", themeTokens.textMuted].join(" ")}>{t("subtitle")}</div>
-                </div>
+                <div className={["text-xl font-bold", themeTokens.textStrong].join(" ")}>{t("settings")}</div>
                 <button onClick={onClose} className={["rounded-xl px-3 py-2 ring-1 transition", themeTokens.btnGhost].join(" ")}>
                   {t("close")}
                 </button>
@@ -732,12 +686,7 @@
                 </div>
 
                 <div className={["rounded-xl ring-1 p-3", themeTokens.card, themeTokens.ring].join(" ")}>
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className={["text-[11px] uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("learnLog")}</div>
-                      <div className={["text-xs mt-1", themeTokens.textMuted].join(" ")}>localStorage → CSV export</div>
-                    </div>
-                  </div>
+                  <div className={["text-[11px] uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("learnLog")}</div>
                   <div className="mt-3 flex gap-2">
                     <button onClick={onDownloadCSV} className={["flex-1 rounded-xl px-3 py-2 ring-1 transition font-semibold", themeTokens.btnPrimary].join(" ")}>
                       {t("downloadCSV")}
@@ -747,7 +696,6 @@
                     </button>
                   </div>
                 </div>
-
               </div>
 
               <div className="mt-4 flex gap-2">
@@ -778,11 +726,11 @@
       getFeatureStats,
       theme,
       borderIntensity,
-      revealTarget,       // highlight + fly-to when true
+      revealTarget,
       locked,
       clickMarker,
       targetMarker,
-      reveal              // <- NEW: needed for distance label
+      reveal
     }) {
       const containerRef = useRef(null);
       const globeRef = useRef(null);
@@ -825,18 +773,11 @@
         };
       }, [theme, borderIntensity]);
 
-      // Great-circle arc style
       const arcStyle = useMemo(() => {
         if (theme === "light") {
-          return {
-            color: "rgba(2,6,23,0.85)",
-            colorAlt: "rgba(59,130,246,0.95)"
-          };
+          return { color: "rgba(2,6,23,0.85)", colorAlt: "rgba(59,130,246,0.95)" };
         }
-        return {
-          color: "rgba(226,232,240,0.85)",
-          colorAlt: "rgba(96,165,250,0.95)"
-        };
+        return { color: "rgba(226,232,240,0.85)", colorAlt: "rgba(96,165,250,0.95)" };
       }, [theme]);
 
       useEffect(() => {
@@ -916,7 +857,6 @@
           })
           .polygonsTransitionDuration(reduceMotion ? 0 : 250);
 
-        // Points (markers)
         const pts = [];
         if (clickMarker) pts.push({ ...clickMarker, kind: "click" });
         if (targetMarker) pts.push({ ...targetMarker, kind: "target" });
@@ -929,9 +869,6 @@
           .pointAltitude(d => d.kind === "click" ? 0.02 : 0.03)
           .pointRadius(d => d.kind === "click" ? 0.5 : 0.7);
 
-        // --------
-        // NEW: Great-circle learning arc + label (click mode, wrong answer)
-        // --------
         const shouldArc = !!(revealTarget &&
           reveal?.mode === "click" &&
           reveal?.correct === false &&
@@ -964,11 +901,7 @@
             { lat: clickMarker.lat, lng: clickMarker.lng },
             { lat: targetMarker.lat, lng: targetMarker.lng }
           );
-          return [{
-            lat: mid.lat,
-            lng: mid.lng,
-            text: `${Math.round(reveal.distKm)} km`
-          }];
+          return [{ lat: mid.lat, lng: mid.lng, text: `${Math.round(reveal.distKm)} km` }];
         })() : [];
 
         globe
@@ -1056,13 +989,12 @@
 
         const st = getFeatureStats?.(targetId);
         if (!st) return;
-
         const alt = altitudeFromSpan(st.span);
         try { globe.camera().up.set(0, 1, 0); } catch {}
         globe.pointOfView({ lat: st.lat, lng: st.lng, altitude: alt }, reduceMotion ? 0 : 1100);
       }, [targetId, mode, reduceMotion, getFeatureStats, revealTarget]);
 
-      // Reveal fly-to (after answer, both modes)
+      // Reveal fly-to
       useEffect(() => {
         const globe = globeRef.current;
         if (!globe || !targetId) return;
@@ -1070,7 +1002,6 @@
 
         const st = getFeatureStats?.(targetId);
         if (!st) return;
-
         const alt = altitudeFromSpan(st.span);
         try { globe.camera().up.set(0, 1, 0); } catch {}
         globe.pointOfView({ lat: st.lat, lng: st.lng, altitude: alt }, reduceMotion ? 0 : 900);
@@ -1079,14 +1010,6 @@
       return (
         <div className="relative h-full w-full rounded-2xl overflow-hidden ring-1 ring-black/10">
           <div ref={containerRef} className="absolute inset-0" />
-          <div className="pointer-events-none absolute inset-x-0 top-0 p-3">
-            <div className="flex items-center justify-between text-xs md:text-sm">
-              <span className="inline-flex items-center gap-2 rounded-full bg-black/35 text-white px-3 py-1 ring-1 ring-white/10">
-                <span className="h-2 w-2 rounded-full bg-cyan-300/90"></span>
-                Drag to rotate · Scroll / pinch to zoom
-              </span>
-            </div>
-          </div>
         </div>
       );
     }
@@ -1123,7 +1046,6 @@
             btnGhost: "bg-white/60 hover:bg-white ring-black/10 text-slate-900",
             btnSelected: "bg-slate-900 text-white ring-black/20",
             btnUnselected: "bg-white/60 hover:bg-white ring-black/10 text-slate-900",
-            input: "bg-white/70 text-slate-900"
           };
         }
         return {
@@ -1137,11 +1059,9 @@
           btnGhost: "bg-black/20 hover:bg-white/5 ring-white/10 text-slate-100",
           btnSelected: "bg-white/10 ring-white/20 text-slate-100",
           btnUnselected: "bg-black/20 hover:bg-white/5 ring-white/10 text-slate-100",
-          input: "bg-black/30 text-slate-100"
         };
       }, [settings.theme]);
 
-      // Data
       const [countries, setCountries] = useState([]);
       const [idToEN, setIdToEN] = useState(new Map());
       const [idToDE, setIdToDE] = useState(new Map());
@@ -1149,8 +1069,7 @@
 
       const activeNames = useMemo(() => settings.lang === "de" ? idToDE : idToEN, [settings.lang, idToDE, idToEN]);
 
-      // Game state
-      const [mode, setMode] = useState("click"); // "click" | "choice"
+      const [mode, setMode] = useState("click");
       const [roundIdx, setRoundIdx] = useState(0);
       const [deck, setDeck] = useState([]);
       const [targetId, setTargetId] = useState(null);
@@ -1163,8 +1082,7 @@
       const [choices, setChoices] = useState([]);
       const [locked, setLocked] = useState(false);
 
-      // reveal state
-      const [reveal, setReveal] = useState(null); // {mode, correct, correctName, yourName, distKm, diff, mult, points}
+      const [reveal, setReveal] = useState(null);
       const [revealTarget, setRevealTarget] = useState(false);
 
       const [clickMarker, setClickMarker] = useState(null);
@@ -1177,12 +1095,6 @@
         try { return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
         catch { return false; }
       }, []);
-
-      const [highscores, setHighscores] = useState(() => safeLSGet("globeGuess.highscores", {
-        click: { bestScore: 0, bestAccuracy: 0, bestStreak: 0 },
-        choice: { bestScore: 0, bestAccuracy: 0, bestStreak: 0 },
-      }));
-      useEffect(() => safeLSSet("globeGuess.highscores", highscores), [highscores]);
 
       const getFeatureStatsById = useMemo(() => {
         if (!diffPack?.statsById) return null;
@@ -1199,7 +1111,6 @@
         return total ? correctCount / total : NaN;
       }, [correctCount, wrongCount]);
 
-      // Load local geometry + TSV(id,en,de)
       useEffect(() => {
         (async () => {
           setLoading(true);
@@ -1218,7 +1129,6 @@
 
             const mapEN = new Map();
             const mapDE = new Map();
-
             const lines = tsv.split(/\r?\n/).filter(Boolean);
             const header = lines[0].split("\t").map(s => s.trim().toLowerCase());
             const idIdx = header.indexOf("id");
@@ -1257,10 +1167,7 @@
 
         const pool = countries
           .map(f => String(f.id))
-          .filter(id => {
-            const d = getDiffById?.(id)?.difficulty ?? 3;
-            return d <= maxD && idToEN.has(id);
-          });
+          .filter(id => (getDiffById?.(id)?.difficulty ?? 3) <= maxD && idToEN.has(id));
 
         const safePool = pool.length >= N ? pool : countries.map(f => String(f.id)).filter(id => idToEN.has(id));
         const sorted = safePool.slice().sort((a, b) => (getDiffById?.(a)?.difficulty ?? 3) - (getDiffById?.(b)?.difficulty ?? 3));
@@ -1305,15 +1212,14 @@
           remaining.delete(pick);
           out.push(pick);
         }
-
         return out;
       }
 
       function buildChoices(target) {
         const targetIdStr = String(target);
         const pool = countries.map(f => String(f.id)).filter(id => id !== targetIdStr && idToEN.has(id));
-
         const targetDiff = getDiffById?.(targetIdStr)?.difficulty ?? 3;
+
         const near = pool
           .map(id => ({ id, d: getDiffById?.(id)?.difficulty ?? 3 }))
           .sort((a,b)=> Math.abs(a.d - targetDiff) - Math.abs(b.d - targetDiff))
@@ -1364,78 +1270,38 @@
 
       useEffect(() => {
         if (!targetId) return;
-        if (mode === "choice" && !reveal && choices.length) {
-          setChoices(buildChoices(targetId));
-        }
+        if (mode === "choice" && !reveal && choices.length) setChoices(buildChoices(targetId));
       }, [settings.lang]);
-
-      function endGame() {
-        const total = correctCount + wrongCount;
-        const acc = total ? correctCount / total : 0;
-        const hsKey = mode;
-
-        setHighscores(prev => {
-          const old = prev[hsKey] || { bestScore: 0, bestAccuracy: 0, bestStreak: 0 };
-          return {
-            ...prev,
-            [hsKey]: {
-              bestScore: Math.max(old.bestScore || 0, score),
-              bestAccuracy: Math.max(old.bestAccuracy || 0, acc),
-              bestStreak: Math.max(old.bestStreak || 0, streak),
-            }
-          };
-        });
-
-        setGameOverOpen(true);
-      }
 
       function gotoNextQuestion() {
         resetRoundUI();
-
         const nextIdx = roundIdx + 1;
         if (nextIdx >= settings.roundsTotal) {
-          endGame();
+          setGameOverOpen(true);
           return;
         }
-
         setRoundIdx(nextIdx);
         const nextId = deck[nextIdx];
         setTargetId(nextId);
-
         if (mode === "choice") setChoices(buildChoices(nextId));
         else setChoices([]);
       }
 
-      useEffect(() => {
-        if (!settings.timerEnabled) return;
-        if (locked || reveal || gameOverOpen) return;
-        if (!targetId) return;
-
-        const ms = settings.secondsPerRound * 1000;
-        const timer = setTimeout(() => {
-          if (mode === "choice") onChoiceSelect({ id: "__timeout__", name: "⏱️", correct: false }, true);
-          else onGlobeClick(null, true);
-        }, ms);
-
-        return () => clearTimeout(timer);
-      }, [settings.timerEnabled, settings.secondsPerRound, locked, !!reveal, gameOverOpen, targetId, mode]);
-
-      function onGlobeClick(pt, isTimeout = false) {
+      function onGlobeClick(pt) {
         if (locked || reveal || mode !== "click") return;
         if (!targetId) return;
-
         setLocked(true);
 
         const feature = countries.find(f => String(f.id) === String(targetId));
         const diff = getDiffById?.(targetId)?.difficulty ?? 3;
         const mult = difficultyMultiplier(diff);
 
-        if (!isTimeout && pt) setClickMarker({ lat: pt.lat, lng: pt.lng });
+        if (pt) setClickMarker({ lat: pt.lat, lng: pt.lng });
 
         const st = getFeatureStatsById?.(targetId);
         if (st) setTargetMarker({ lat: st.lat, lng: st.lng });
 
-        const click = (!isTimeout && pt && feature)
+        const click = (pt && feature)
           ? polygonDistanceKmToBorder(pt.lng, pt.lat, feature)
           : { inside: false, distKm: 99999 };
 
@@ -1453,26 +1319,15 @@
         }
 
         updateLearnLog(targetId, correct);
-
         setRevealTarget(true);
 
         const correctName = activeNames.get(String(targetId)) || idToEN.get(String(targetId)) || "—";
-        setReveal({
-          mode: "click",
-          correct,
-          correctName,
-          yourName: "",
-          distKm: click.distKm,
-          diff,
-          mult,
-          points
-        });
+        setReveal({ mode: "click", correct, correctName, yourName: "", distKm: click.distKm, diff, mult, points });
       }
 
-      function onChoiceSelect(opt, isTimeout = false) {
+      function onChoiceSelect(opt) {
         if (locked || reveal || mode !== "choice") return;
         if (!targetId) return;
-
         setLocked(true);
 
         const correct = !!opt?.correct;
@@ -1493,35 +1348,23 @@
         }
 
         updateLearnLog(targetId, correct);
-
         setRevealTarget(true);
 
         const correctName = activeNames.get(String(targetId)) || idToEN.get(String(targetId)) || "—";
-        setReveal({
-          mode: "choice",
-          correct,
-          correctName,
-          yourName: isTimeout ? "⏱️" : (opt?.name || "—"),
-          distKm: 0,
-          diff,
-          mult,
-          points
-        });
-      }
-
-      function setModeAndRestart(m) { resetGame(m); }
-
-      function resetHighscores() {
-        setHighscores({
-          click: { bestScore: 0, bestAccuracy: 0, bestStreak: 0 },
-          choice: { bestScore: 0, bestAccuracy: 0, bestStreak: 0 },
-        });
+        setReveal({ mode: "choice", correct, correctName, yourName: opt?.name || "—", distKm: 0, diff, mult, points });
       }
 
       const currentName = targetId ? (activeNames.get(String(targetId)) || idToEN.get(String(targetId)) || "—") : "—";
       const currentDiff = targetId ? (getDiffById?.(targetId)?.difficulty ?? 3) : 3;
       const currentMult = difficultyMultiplier(currentDiff);
       const roundLabel = `${roundIdx + 1}/${settings.roundsTotal}`;
+
+      // Mobile-first container: prevent scrolling by making a fixed dock.
+      // Desktop uses side panel (same content).
+      const isMobile = useMemo(() => {
+        try { return window.matchMedia && window.matchMedia("(max-width: 1023px)").matches; }
+        catch { return true; }
+      }, []);
 
       if (loading) {
         return (
@@ -1532,7 +1375,6 @@
           </div>
         );
       }
-
       if (loadErr) {
         return (
           <div className={["h-full flex items-center justify-center p-4", themeTokens.page].join(" ")}>
@@ -1547,285 +1389,362 @@
         );
       }
 
-      return (
-        <div className={["h-full", themeTokens.page].join(" ")}>
-          <div className="h-full max-w-7xl mx-auto p-3 sm:p-4 grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4">
-            <div className="lg:col-span-7 h-[52vh] lg:h-full">
-              <GlobeView
-                countries={countries}
-                targetId={targetId}
-                mode={mode}
-                reduceMotion={reduceMotion}
-                onClickLatLng={(pt) => onGlobeClick(pt, false)}
-                getFeatureStats={(id) => getFeatureStatsById?.(id)}
-                theme={settings.theme}
-                borderIntensity={settings.borderIntensity}
-                revealTarget={revealTarget}
-                locked={locked || !!reveal || gameOverOpen}
-                clickMarker={clickMarker}
-                targetMarker={targetMarker}
-                reveal={reveal}
-              />
+      // ---- Mobile "dock" UI (no scrolling) ----
+      const MobileDock = (
+        <div className={["rounded-2xl ring-1 px-3 py-3", themeTokens.panel, themeTokens.ring].join(" ")}>
+          <div className="flex items-center justify-between gap-2">
+            <div className={["text-sm font-bold", themeTokens.textStrong].join(" ")}>{t("title")}</div>
+            <div className="flex gap-2">
+              <button onClick={() => setSettingsOpen(true)} className={["rounded-xl px-3 py-2 ring-1 text-sm font-semibold", themeTokens.btnGhost].join(" ")}>
+                {t("settings")}
+              </button>
+              <button onClick={() => resetGame(mode)} className={["rounded-xl px-3 py-2 ring-1 text-sm font-semibold", themeTokens.btnPrimary].join(" ")}>
+                {t("newGame")}
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-2 grid grid-cols-4 gap-2">
+            <div className={["rounded-xl ring-1 p-2", themeTokens.card, themeTokens.ring].join(" ")}>
+              <div className={["text-[10px]", themeTokens.textMuted].join(" ")}>{t("round")}</div>
+              <div className={["text-base font-bold", themeTokens.textStrong].join(" ")}>{roundLabel}</div>
+            </div>
+            <div className={["rounded-xl ring-1 p-2", themeTokens.card, themeTokens.ring].join(" ")}>
+              <div className={["text-[10px]", themeTokens.textMuted].join(" ")}>{t("score")}</div>
+              <div className={["text-base font-bold", themeTokens.textStrong].join(" ")}>{score}</div>
+            </div>
+            <div className={["rounded-xl ring-1 p-2", themeTokens.card, themeTokens.ring].join(" ")}>
+              <div className={["text-[10px]", themeTokens.textMuted].join(" ")}>{t("streak")}</div>
+              <div className={["text-base font-bold", themeTokens.textStrong].join(" ")}>{streak}</div>
+            </div>
+            <div className={["rounded-xl ring-1 p-2", themeTokens.card, themeTokens.ring].join(" ")}>
+              <div className={["text-[10px]", themeTokens.textMuted].join(" ")}>{t("accuracy")}</div>
+              <div className={["text-base font-bold", themeTokens.textStrong].join(" ")}>{fmtPct(accuracy)}</div>
+            </div>
+          </div>
+
+          {/* Question + action area: always visible */}
+          <div className={["mt-2 rounded-2xl ring-1 p-3", themeTokens.card, themeTokens.ring].join(" ")}>
+            <div className="flex items-center justify-between gap-2">
+              <div className={["text-[11px] uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("difficultyClimax")}</div>
+              <div className={["text-xs font-semibold", themeTokens.textMuted].join(" ")}>
+                {currentDiff.toFixed(2)}/5 · {diffStars(currentDiff)} · {t("difficultyMult")}: <span className={["font-bold", themeTokens.textStrong].join(" ")}>×{currentMult.toFixed(2)}</span>
+              </div>
             </div>
 
-            <div className="lg:col-span-5 flex flex-col gap-3 sm:gap-4">
-              <div className={["rounded-2xl ring-1 p-4", themeTokens.panel, themeTokens.ring].join(" ")}>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className={["text-3xl font-extrabold leading-tight", themeTokens.textStrong].join(" ")}>{t("title")}</div>
-                    <div className={["text-sm mt-1", themeTokens.textMuted].join(" ")}>{t("subtitle")}</div>
+            {!reveal && mode === "click" && (
+              <div className="mt-2">
+                <div className={["text-xs", themeTokens.textMuted].join(" ")}>{t("findAndClick")}</div>
+                <div className={["mt-1 text-xl font-extrabold leading-tight clamp2", themeTokens.textStrong].join(" ")}>{currentName}</div>
+                <div className={["mt-1 text-xs", themeTokens.textMuted].join(" ")}>{t("clickAnywhere")}</div>
+              </div>
+            )}
+
+            {!reveal && mode === "choice" && (
+              <div className="mt-2">
+                <div className={["text-xs", themeTokens.textMuted].join(" ")}>{t("highlightedIs")}</div>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {choices.map((opt) => (
+                    <button key={`${roundIdx}-${opt.id}`}
+                      disabled={locked || !!reveal}
+                      onClick={() => onChoiceSelect(opt)}
+                      className={[
+                        "rounded-xl px-3 py-3 ring-1 transition font-semibold text-sm text-left",
+                        (locked || !!reveal) ? "opacity-60 cursor-not-allowed" : "",
+                        themeTokens.btnGhost
+                      ].join(" ")}>
+                      {opt.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Reveal "toast" with pinned Next */}
+            {reveal && (
+              <div className="mt-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className={["text-base font-extrabold", themeTokens.textStrong].join(" ")}>
+                    {reveal.correct ? `✅ ${t("correct")}` : `❌ ${t("wrong")}`}
                   </div>
-                  <div className={["rounded-2xl ring-1 px-3 py-2 text-right", themeTokens.card, themeTokens.ring].join(" ")}>
-                    <div className={["text-[10px] uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("round")}</div>
-                    <div className={["text-xl font-bold", themeTokens.textStrong].join(" ")}>{roundLabel}</div>
+                  <button onClick={gotoNextQuestion} className={["rounded-xl px-4 py-2 ring-1 font-semibold", themeTokens.btnPrimary].join(" ")}>
+                    {t("next")}
+                  </button>
+                </div>
+
+                <div className={["mt-2 rounded-xl ring-1 p-2", themeTokens.panel, themeTokens.ring].join(" ")}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className={["text-xs", themeTokens.textMuted].join(" ")}>{t("correctAnswer")}</div>
+                    <div className={["text-xs font-semibold text-right", themeTokens.textStrong].join(" ")}>{reveal.correctName}</div>
+                  </div>
+                  {reveal.mode === "choice" && (
+                    <div className="flex items-center justify-between gap-2 mt-1">
+                      <div className={["text-xs", themeTokens.textMuted].join(" ")}>{t("yourAnswer")}</div>
+                      <div className={["text-xs font-semibold text-right", themeTokens.textStrong].join(" ")}>{reveal.yourName}</div>
+                    </div>
+                  )}
+                  {reveal.mode === "click" && (
+                    <div className="flex items-center justify-between gap-2 mt-1">
+                      <div className={["text-xs", themeTokens.textMuted].join(" ")}>{t("distance")}</div>
+                      <div className={["text-xs font-semibold text-right", themeTokens.textStrong].join(" ")}>{Math.round(reveal.distKm)} km</div>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-2 mt-1">
+                    <div className={["text-xs", themeTokens.textMuted].join(" ")}>{t("points")}</div>
+                    <div className={["text-xs font-extrabold text-right", themeTokens.textStrong].join(" ")}>
+                      {reveal.points >= 0 ? "+" : ""}{reveal.points}
+                    </div>
                   </div>
                 </div>
 
-                <div className="mt-3 grid grid-cols-4 gap-2">
-                  <div className={["rounded-2xl ring-1 p-3", themeTokens.card, themeTokens.ring].join(" ")}>
-                    <div className={["text-[10px] uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("score")}</div>
-                    <div className={["text-2xl font-bold", themeTokens.textStrong].join(" ")}>{score}</div>
-                  </div>
-                  <div className={["rounded-2xl ring-1 p-3", themeTokens.card, themeTokens.ring].join(" ")}>
-                    <div className={["text-[10px] uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("streak")}</div>
-                    <div className={["text-2xl font-bold", themeTokens.textStrong].join(" ")}>{streak}</div>
-                  </div>
-                  <div className={["rounded-2xl ring-1 p-3", themeTokens.card, themeTokens.ring].join(" ")}>
-                    <div className={["text-[10px] uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("accuracy")}</div>
-                    <div className={["text-2xl font-bold", themeTokens.textStrong].join(" ")}>{fmtPct(accuracy)}</div>
-                  </div>
-                  <div className={["rounded-2xl ring-1 p-3", themeTokens.card, themeTokens.ring].join(" ")}>
-                    <div className={["text-[10px] uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("mode")}</div>
-                    <div className={["text-2xl font-bold", themeTokens.textStrong].join(" ")}>
-                      {mode === "click" ? t("clickMode") : t("choiceMode")}
-                    </div>
-                  </div>
-                </div>
-
-                <div className={["mt-3 rounded-2xl ring-1 p-4", themeTokens.card, themeTokens.ring].join(" ")}>
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className={["text-[11px] uppercase tracking-wide", themeTokens.textMuted].join(" ")}>
-                        {t("difficultyClimax")}
-                      </div>
-                      <div className={["text-xs mt-1", themeTokens.textMuted].join(" ")}>
-                        {t("difficultyClimaxHint")}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className={["text-sm font-bold", themeTokens.textStrong].join(" ")}>
-                        {currentDiff.toFixed(2)}/5
-                      </div>
-                      <div className={["text-xs", themeTokens.textMuted].join(" ")}>{diffStars(currentDiff)}</div>
-                      <div className={["text-xs mt-1", themeTokens.textMuted].join(" ")}>
-                        {t("difficultyMult")}: <span className={["font-semibold", themeTokens.textStrong].join(" ")}>×{currentMult.toFixed(2)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4">
-                    {mode === "click" ? (
-                      <>
-                        <div className={["text-sm", themeTokens.textMuted].join(" ")}>{t("findAndClick")}</div>
-                        <div className={["mt-1 text-2xl font-extrabold", themeTokens.textStrong].join(" ")}>
-                          {currentName}
-                        </div>
-                        <div className={["mt-2 text-sm", themeTokens.textMuted].join(" ")}>
-                          {t("clickAnywhere")}
-                        </div>
-                        <div className={["mt-2 text-xs", themeTokens.textMuted].join(" ")}>
-                          {t("pointsRuleClick")}
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className={["text-sm", themeTokens.textMuted].join(" ")}>{t("highlightedIs")}</div>
-                        <div className={["mt-1 text-xs", themeTokens.textMuted].join(" ")}>{t("highlightHint")}</div>
-
-                        <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
-                          {choices.map((opt) => (
-                            <button
-                              key={`${roundIdx}-${opt.id}`}
-                              disabled={locked || !!reveal}
-                              onClick={() => onChoiceSelect(opt, false)}
-                              className={[
-                                "rounded-2xl px-3 py-3 ring-1 transition font-semibold text-sm",
-                                (locked || !!reveal) ? "opacity-60 cursor-not-allowed" : "",
-                                themeTokens.btnGhost
-                              ].join(" ")}
-                            >
-                              {opt.name}
-                            </button>
-                          ))}
-                        </div>
-
-                        <div className={["mt-2 text-xs", themeTokens.textMuted].join(" ")}>
-                          {t("pointsRuleChoice")}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Inline learning reveal card */}
-                {reveal && (
-                  <div className={["mt-3 rounded-2xl ring-1 p-4 pop", themeTokens.panel, themeTokens.ring].join(" ")}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className={["text-lg font-extrabold", themeTokens.textStrong].join(" ")}>
-                        {reveal.correct ? `✅ ${t("correct")}` : `❌ ${t("wrong")}`}
-                      </div>
-                      <button onClick={() => {
-                        // clear arc/label before continuing
-                        gotoNextQuestion();
-                      }} className={["rounded-xl px-3 py-2 ring-1 transition font-semibold", themeTokens.btnPrimary].join(" ")}>
-                        {t("next")}
-                      </button>
-                    </div>
-
-                    <div className={["mt-3 rounded-xl ring-1 p-3", themeTokens.card, themeTokens.ring].join(" ")}>
-                      <div className="flex items-center justify-between gap-3">
-                        <div className={["text-sm", themeTokens.textMuted].join(" ")}>{t("correctAnswer")}</div>
-                        <div className={["text-sm font-semibold text-right", themeTokens.textStrong].join(" ")}>{reveal.correctName}</div>
-                      </div>
-                      {reveal.mode === "choice" && (
-                        <div className="flex items-center justify-between gap-3 mt-2">
-                          <div className={["text-sm", themeTokens.textMuted].join(" ")}>{t("yourAnswer")}</div>
-                          <div className={["text-sm font-semibold text-right", themeTokens.textStrong].join(" ")}>{reveal.yourName}</div>
-                        </div>
-                      )}
-                      {reveal.mode === "click" && (
-                        <div className="flex items-center justify-between gap-3 mt-2">
-                          <div className={["text-sm", themeTokens.textMuted].join(" ")}>{t("distance")}</div>
-                          <div className={["text-sm font-semibold text-right", themeTokens.textStrong].join(" ")}>{Math.round(reveal.distKm)} km</div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className={["mt-3 rounded-xl ring-1 p-3", themeTokens.card, themeTokens.ring].join(" ")}>
-                      <div className="flex items-center justify-between gap-3">
-                        <div className={["text-sm", themeTokens.textMuted].join(" ")}>{t("difficulty")}</div>
-                        <div className={["text-sm font-semibold text-right", themeTokens.textStrong].join(" ")}>
-                          {reveal.diff.toFixed(2)}/5 &nbsp; <span className="text-xs">{diffStars(reveal.diff)}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between gap-3 mt-2">
-                        <div className={["text-sm", themeTokens.textMuted].join(" ")}>{t("difficultyMult")}</div>
-                        <div className={["text-sm font-semibold text-right", themeTokens.textStrong].join(" ")}>×{reveal.mult.toFixed(2)}</div>
-                      </div>
-                      <div className="flex items-center justify-between gap-3 mt-2">
-                        <div className={["text-sm", themeTokens.textMuted].join(" ")}>{t("points")}</div>
-                        <div className={["text-sm font-extrabold text-right", themeTokens.textStrong].join(" ")}>
-                          {reveal.points >= 0 ? "+" : ""}{reveal.points}
-                        </div>
-                      </div>
-                    </div>
-
-                    {reveal.mode === "click" && !reveal.correct && (
-                      <div className={["mt-3 text-xs", themeTokens.textMuted].join(" ")}>
-                        Learning aid: the dashed arc shows the shortest path to the correct country; the label shows the distance.
-                      </div>
-                    )}
+                {reveal.mode === "click" && !reveal.correct && (
+                  <div className={["mt-1 text-[11px]", themeTokens.textMuted].join(" ")}>
+                    {t("learningAid")}
                   </div>
                 )}
+              </div>
+            )}
 
-                <div className="mt-3 flex gap-2">
-                  <button onClick={() => resetGame(mode)} className={["flex-1 rounded-xl px-4 py-3 ring-1 transition font-semibold", themeTokens.btnPrimary].join(" ")}>
-                    {t("newGame")}
-                  </button>
-                  <button onClick={() => setSettingsOpen(true)} className={["flex-1 rounded-xl px-4 py-3 ring-1 transition font-semibold", themeTokens.btnGhost].join(" ")}>
-                    {t("settings")}
-                  </button>
-                  <button onClick={() => setModeAndRestart("click")} className={["rounded-xl px-4 py-3 ring-1 transition font-semibold", themeTokens.btnGhost].join(" ")}>
-                    {t("clickMode")}
-                  </button>
-                  <button onClick={() => setModeAndRestart("choice")} className={["rounded-xl px-4 py-3 ring-1 transition font-semibold", themeTokens.btnGhost].join(" ")}>
-                    {t("choiceMode")}
-                  </button>
+            {/* Mode toggle small */}
+            {!reveal && (
+              <div className="mt-2 flex gap-2">
+                <button onClick={() => { setMode("click"); resetGame("click"); }}
+                  className={["flex-1 rounded-xl px-3 py-2 ring-1 text-sm font-semibold", mode==="click" ? themeTokens.btnSelected : themeTokens.btnGhost].join(" ")}>
+                  {t("clickMode")}
+                </button>
+                <button onClick={() => { setMode("choice"); resetGame("choice"); }}
+                  className={["flex-1 rounded-xl px-3 py-2 ring-1 text-sm font-semibold", mode==="choice" ? themeTokens.btnSelected : themeTokens.btnGhost].join(" ")}>
+                  {t("choiceMode")}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Game over compact (mobile) */}
+          {gameOverOpen && (
+            <div className={["mt-2 rounded-2xl ring-1 p-3 pop", themeTokens.panel, themeTokens.ring].join(" ")}>
+              <div className={["text-lg font-extrabold", themeTokens.textStrong].join(" ")}>🎉 {t("gameOverTitle")}</div>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <div className={["rounded-xl ring-1 p-2", themeTokens.card, themeTokens.ring].join(" ")}>
+                  <div className={["text-[10px]", themeTokens.textMuted].join(" ")}>{t("score")}</div>
+                  <div className={["text-base font-bold", themeTokens.textStrong].join(" ")}>{score}</div>
+                </div>
+                <div className={["rounded-xl ring-1 p-2", themeTokens.card, themeTokens.ring].join(" ")}>
+                  <div className={["text-[10px]", themeTokens.textMuted].join(" ")}>{t("accuracy")}</div>
+                  <div className={["text-base font-bold", themeTokens.textStrong].join(" ")}>{fmtPct(accuracy)}</div>
                 </div>
               </div>
+              <button onClick={() => { setGameOverOpen(false); resetGame(mode); }}
+                className={["mt-2 w-full rounded-xl px-4 py-2 ring-1 font-semibold", themeTokens.btnPrimary].join(" ")}>
+                {t("playAgain")}
+              </button>
+            </div>
+          )}
+        </div>
+      );
 
-              <div className={["rounded-2xl ring-1 p-4", themeTokens.panel, themeTokens.ring].join(" ")}>
-                <div className="flex items-center justify-between gap-3">
-                  <div className={["text-xl font-bold", themeTokens.textStrong].join(" ")}>{t("highscore")}</div>
-                  <button onClick={() => setHighscores({
-                    click: { bestScore: 0, bestAccuracy: 0, bestStreak: 0 },
-                    choice: { bestScore: 0, bestAccuracy: 0, bestStreak: 0 },
-                  })} className={["rounded-xl px-3 py-2 ring-1 transition text-sm font-semibold", themeTokens.btnGhost].join(" ")}>
-                    {t("reset")}
-                  </button>
-                </div>
+      // ---- Desktop side panel (kept, but scroll-safe) ----
+      const DesktopPanel = (
+        <div className="flex flex-col gap-3 h-full">
+          <div className={["rounded-2xl ring-1 p-4", themeTokens.panel, themeTokens.ring].join(" ")}>
+            <div className="flex items-start justify-between gap-3">
+              <div className={["text-3xl font-extrabold", themeTokens.textStrong].join(" ")}>{t("title")}</div>
+              <div className="flex gap-2">
+                <button onClick={() => setSettingsOpen(true)} className={["rounded-xl px-3 py-2 ring-1 font-semibold", themeTokens.btnGhost].join(" ")}>
+                  {t("settings")}
+                </button>
+                <button onClick={() => resetGame(mode)} className={["rounded-xl px-3 py-2 ring-1 font-semibold", themeTokens.btnPrimary].join(" ")}>
+                  {t("newGame")}
+                </button>
+              </div>
+            </div>
 
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {["click","choice"].map(k => {
-                    const hs = highscores[k];
-                    return (
-                      <div key={k} className={["rounded-2xl ring-1 p-4", themeTokens.card, themeTokens.ring].join(" ")}>
-                        <div className={["text-sm font-bold", themeTokens.textStrong].join(" ")}>
-                          {k === "click" ? t("clickMode") : t("choiceMode")}
-                        </div>
-                        <div className={["mt-2 text-sm", themeTokens.textMuted].join(" ")}>
-                          Best score: <span className={["font-semibold", themeTokens.textStrong].join(" ")}>{hs.bestScore}</span>
-                        </div>
-                        <div className={["text-sm", themeTokens.textMuted].join(" ")}>
-                          Best accuracy: <span className={["font-semibold", themeTokens.textStrong].join(" ")}>{fmtPct(hs.bestAccuracy)}</span>
-                        </div>
-                        <div className={["text-sm", themeTokens.textMuted].join(" ")}>
-                          Best streak: <span className={["font-semibold", themeTokens.textStrong].join(" ")}>{hs.bestStreak}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+            <div className="mt-3 grid grid-cols-4 gap-2">
+              <div className={["rounded-2xl ring-1 p-3", themeTokens.card, themeTokens.ring].join(" ")}>
+                <div className={["text-[10px] uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("round")}</div>
+                <div className={["text-xl font-bold", themeTokens.textStrong].join(" ")}>{roundLabel}</div>
+              </div>
+              <div className={["rounded-2xl ring-1 p-3", themeTokens.card, themeTokens.ring].join(" ")}>
+                <div className={["text-[10px] uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("score")}</div>
+                <div className={["text-xl font-bold", themeTokens.textStrong].join(" ")}>{score}</div>
+              </div>
+              <div className={["rounded-2xl ring-1 p-3", themeTokens.card, themeTokens.ring].join(" ")}>
+                <div className={["text-[10px] uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("streak")}</div>
+                <div className={["text-xl font-bold", themeTokens.textStrong].join(" ")}>{streak}</div>
+              </div>
+              <div className={["rounded-2xl ring-1 p-3", themeTokens.card, themeTokens.ring].join(" ")}>
+                <div className={["text-[10px] uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("accuracy")}</div>
+                <div className={["text-xl font-bold", themeTokens.textStrong].join(" ")}>{fmtPct(accuracy)}</div>
+              </div>
+            </div>
 
-                <div className={["mt-3 rounded-2xl ring-1 p-4", themeTokens.card, themeTokens.ring].join(" ")}>
-                  <div className={["text-lg font-bold", themeTokens.textStrong].join(" ")}>{t("howTo")}</div>
-                  <ul className={["mt-2 text-sm space-y-1 list-disc list-inside", themeTokens.textMuted].join(" ")}>
-                    <li>{t("howClick")}</li>
-                    <li>{t("howChoice")}</li>
-                    <li>{t("howDrag")}</li>
-                  </ul>
-                </div>
+            <div className={["mt-3 rounded-2xl ring-1 p-4", themeTokens.card, themeTokens.ring].join(" ")}>
+              <div className="flex items-center justify-between">
+                <div className={["text-sm font-semibold", themeTokens.textMuted].join(" ")}>{t("difficultyClimax")}</div>
+                <div className={["text-sm font-bold", themeTokens.textStrong].join(" ")}>{currentDiff.toFixed(2)}/5 · {diffStars(currentDiff)} · ×{currentMult.toFixed(2)}</div>
               </div>
 
-              {gameOverOpen && (
-                <div className={["rounded-2xl ring-1 p-4 pop", themeTokens.panel, themeTokens.ring].join(" ")}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className={["text-2xl font-extrabold", themeTokens.textStrong].join(" ")}>🎉 {t("gameOverTitle")}</div>
-                      <div className={["text-sm mt-1", themeTokens.textMuted].join(" ")}>{t("gameOverBody")}</div>
-                    </div>
-                    <button onClick={() => setGameOverOpen(false)} className={["rounded-xl px-3 py-2 ring-1 transition font-semibold", themeTokens.btnGhost].join(" ")}>
-                      {t("close")}
-                    </button>
-                  </div>
+              {mode === "click" && !reveal && (
+                <div className="mt-3">
+                  <div className={["text-sm", themeTokens.textMuted].join(" ")}>{t("findAndClick")}</div>
+                  <div className={["mt-1 text-2xl font-extrabold", themeTokens.textStrong].join(" ")}>{currentName}</div>
+                  <div className={["mt-2 text-sm", themeTokens.textMuted].join(" ")}>{t("clickAnywhere")}</div>
+                </div>
+              )}
 
-                  <div className="mt-3 grid grid-cols-2 gap-3">
-                    <div className={["rounded-2xl ring-1 p-4", themeTokens.card, themeTokens.ring].join(" ")}>
-                      <div className={["text-xs uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("score")}</div>
-                      <div className={["mt-1 text-3xl font-bold", themeTokens.textStrong].join(" ")}>{score}</div>
-                    </div>
-                    <div className={["rounded-2xl ring-1 p-4", themeTokens.card, themeTokens.ring].join(" ")}>
-                      <div className={["text-xs uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("accuracy")}</div>
-                      <div className={["mt-1 text-3xl font-bold", themeTokens.textStrong].join(" ")}>{fmtPct(accuracy)}</div>
-                    </div>
-                    <div className={["rounded-2xl ring-1 p-4", themeTokens.card, themeTokens.ring].join(" ")}>
-                      <div className={["text-xs uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("summaryCorrect")}</div>
-                      <div className={["mt-1 text-3xl font-bold", themeTokens.textStrong].join(" ")}>{correctCount}</div>
-                    </div>
-                    <div className={["rounded-2xl ring-1 p-4", themeTokens.card, themeTokens.ring].join(" ")}>
-                      <div className={["text-xs uppercase tracking-wide", themeTokens.textMuted].join(" ")}>{t("summaryWrong")}</div>
-                      <div className={["mt-1 text-3xl font-bold", themeTokens.textStrong].join(" ")}>{wrongCount}</div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4">
-                    <button onClick={() => { setGameOverOpen(false); resetGame(mode); }}
-                      className={["w-full rounded-xl px-4 py-3 ring-1 transition font-semibold", themeTokens.btnPrimary].join(" ")}>
-                      {t("playAgain")}
-                    </button>
+              {mode === "choice" && !reveal && (
+                <div className="mt-3">
+                  <div className={["text-sm", themeTokens.textMuted].join(" ")}>{t("highlightedIs")}</div>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {choices.map((opt) => (
+                      <button
+                        key={`${roundIdx}-${opt.id}`}
+                        disabled={locked || !!reveal}
+                        onClick={() => onChoiceSelect(opt)}
+                        className={[
+                          "rounded-2xl px-3 py-3 ring-1 transition font-semibold text-sm",
+                          (locked || !!reveal) ? "opacity-60 cursor-not-allowed" : "",
+                          themeTokens.btnGhost
+                        ].join(" ")}
+                      >
+                        {opt.name}
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}
+
+              {reveal && (
+                <div className={["mt-3 rounded-2xl ring-1 p-4 pop", themeTokens.panel, themeTokens.ring].join(" ")}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className={["text-lg font-extrabold", themeTokens.textStrong].join(" ")}>
+                      {reveal.correct ? `✅ ${t("correct")}` : `❌ ${t("wrong")}`}
+                    </div>
+                    <button onClick={gotoNextQuestion} className={["rounded-xl px-4 py-2 ring-1 transition font-semibold", themeTokens.btnPrimary].join(" ")}>
+                      {t("next")}
+                    </button>
+                  </div>
+                  <div className="mt-3 text-sm">
+                    <div className="flex justify-between gap-2">
+                      <span className={themeTokens.textMuted}>{t("correctAnswer")}</span>
+                      <span className={["font-semibold", themeTokens.textStrong].join(" ")}>{reveal.correctName}</span>
+                    </div>
+                    {reveal.mode === "choice" && (
+                      <div className="flex justify-between gap-2 mt-1">
+                        <span className={themeTokens.textMuted}>{t("yourAnswer")}</span>
+                        <span className={["font-semibold", themeTokens.textStrong].join(" ")}>{reveal.yourName}</span>
+                      </div>
+                    )}
+                    {reveal.mode === "click" && (
+                      <div className="flex justify-between gap-2 mt-1">
+                        <span className={themeTokens.textMuted}>{t("distance")}</span>
+                        <span className={["font-semibold", themeTokens.textStrong].join(" ")}>{Math.round(reveal.distKm)} km</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between gap-2 mt-1">
+                      <span className={themeTokens.textMuted}>{t("points")}</span>
+                      <span className={["font-extrabold", themeTokens.textStrong].join(" ")}>{reveal.points >= 0 ? "+" : ""}{reveal.points}</span>
+                    </div>
+                    {reveal.mode === "click" && !reveal.correct && (
+                      <div className={["mt-2 text-xs", themeTokens.textMuted].join(" ")}>{t("learningAid")}</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {!reveal && (
+                <div className="mt-3 flex gap-2">
+                  <button onClick={() => { setMode("click"); resetGame("click"); }}
+                    className={["flex-1 rounded-xl px-3 py-2 ring-1 font-semibold", mode==="click" ? themeTokens.btnSelected : themeTokens.btnGhost].join(" ")}>
+                    {t("clickMode")}
+                  </button>
+                  <button onClick={() => { setMode("choice"); resetGame("choice"); }}
+                    className={["flex-1 rounded-xl px-3 py-2 ring-1 font-semibold", mode==="choice" ? themeTokens.btnSelected : themeTokens.btnGhost].join(" ")}>
+                    {t("choiceMode")}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {gameOverOpen && (
+              <div className={["mt-3 rounded-2xl ring-1 p-4 pop", themeTokens.panel, themeTokens.ring].join(" ")}>
+                <div className={["text-2xl font-extrabold", themeTokens.textStrong].join(" ")}>🎉 {t("gameOverTitle")}</div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className={["rounded-xl ring-1 p-3", themeTokens.card, themeTokens.ring].join(" ")}>
+                    <div className={["text-[10px]", themeTokens.textMuted].join(" ")}>{t("score")}</div>
+                    <div className={["text-xl font-bold", themeTokens.textStrong].join(" ")}>{score}</div>
+                  </div>
+                  <div className={["rounded-xl ring-1 p-3", themeTokens.card, themeTokens.ring].join(" ")}>
+                    <div className={["text-[10px]", themeTokens.textMuted].join(" ")}>{t("accuracy")}</div>
+                    <div className={["text-xl font-bold", themeTokens.textStrong].join(" ")}>{fmtPct(accuracy)}</div>
+                  </div>
+                </div>
+                <button onClick={() => { setGameOverOpen(false); resetGame(mode); }}
+                  className={["mt-3 w-full rounded-xl px-4 py-3 ring-1 font-semibold", themeTokens.btnPrimary].join(" ")}>
+                  {t("playAgain")}
+                </button>
+              </div>
+            )}
+
+            <div className={["mt-3 rounded-2xl ring-1 p-4", themeTokens.card, themeTokens.ring].join(" ")}>
+              <div className={["text-lg font-bold", themeTokens.textStrong].join(" ")}>{t("howTo")}</div>
+              <ul className={["mt-2 text-sm space-y-1 list-disc list-inside", themeTokens.textMuted].join(" ")}>
+                <li>{t("howClick")}</li>
+                <li>{t("howChoice")}</li>
+                <li>{t("howDrag")}</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      );
+
+      return (
+        <div className={["h-full", themeTokens.page].join(" ")}>
+          {/* MOBILE: fixed-height two-row layout, no scroll */}
+          <div className="h-full lg:hidden p-3 grid grid-rows-[55vh_1fr] gap-3">
+            <GlobeView
+              countries={countries}
+              targetId={targetId}
+              mode={mode}
+              reduceMotion={reduceMotion}
+              onClickLatLng={(pt) => onGlobeClick(pt)}
+              getFeatureStats={(id) => getFeatureStatsById?.(id)}
+              theme={settings.theme}
+              borderIntensity={settings.borderIntensity}
+              revealTarget={revealTarget}
+              locked={locked || !!reveal || gameOverOpen}
+              clickMarker={clickMarker}
+              targetMarker={targetMarker}
+              reveal={reveal}
+            />
+            <div className="min-h-0 overflow-hidden">
+              {MobileDock}
+            </div>
+          </div>
+
+          {/* DESKTOP: classic 2-column */}
+          <div className="hidden lg:block h-full">
+            <div className="h-full max-w-7xl mx-auto p-4 grid grid-cols-12 gap-4">
+              <div className="col-span-7 h-full">
+                <GlobeView
+                  countries={countries}
+                  targetId={targetId}
+                  mode={mode}
+                  reduceMotion={reduceMotion}
+                  onClickLatLng={(pt) => onGlobeClick(pt)}
+                  getFeatureStats={(id) => getFeatureStatsById?.(id)}
+                  theme={settings.theme}
+                  borderIntensity={settings.borderIntensity}
+                  revealTarget={revealTarget}
+                  locked={locked || !!reveal || gameOverOpen}
+                  clickMarker={clickMarker}
+                  targetMarker={targetMarker}
+                  reveal={reveal}
+                />
+              </div>
+              <div className="col-span-5 h-full min-h-0 overflow-auto pr-1">
+                {DesktopPanel}
+              </div>
             </div>
           </div>
 
